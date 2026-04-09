@@ -46,7 +46,8 @@ export default function RegisterPage() {
 
     try {
       await register(name, email, password);
-      navigate('/');
+      // Redirect ke OTP verification page dengan pass email
+      navigate('/register/verify-otp', { state: { email } });
     } catch (err) {
       // Error is handled by useAuth
     }
