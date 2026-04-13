@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { GiFishingHook } from 'react-icons/gi';
@@ -14,6 +14,11 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({});
   const { register, loading, error } = useAuth();
   const navigate = useNavigate();
+
+  // Scroll to top when component mounts
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const getPasswordStrength = () => {
     if (!password) return { level: 0, text: '', color: '' };

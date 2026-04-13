@@ -50,21 +50,52 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'category_id' => 'required|exists:categories,id',
+            'category_id' => 'required|integer|exists:categories,id',
             'name' => 'required|string|max:255',
             'description' => 'required|string',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
             'brand' => 'nullable|string|max:255',
             'location' => 'nullable|in:Air Asin/Laut,Air Tawar,Kolam',
-            'specifications' => 'nullable|array',
+            'specifications' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $product = Product::create($request->all());
+        // Prepare data
+        $data = $request->except('image');
+        
+        // Parse specifications from JSON string to array
+        if (isset($data['specifications']) && is_string($data['specifications'])) {
+            try {
+                $specs = json_decode($data['specifications'], true);
+                $data['specifications'] = $specs ?: [];
+            } catch (\Exception $e) {
+                $data['specifications'] = [];
+            }
+        }
+
+        // Convert category_id to integer
+        $data['category_id'] = (int) $data['category_id'];
+        $data['price'] = (float) $data['price'];
+        $data['stock'] = (int) $data['stock'];
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            try {
+                $file = $request->file('image');
+                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $path = $file->storeAs('products', $filename, 'public');
+                $data['image'] = '/storage/' . $path;
+            } catch (\Exception $e) {
+                return response()->json(['error' => 'Gagal upload gambar: ' . $e->getMessage()], 500);
+            }
+        }
+
+        $product = Product::create($data);
 
         return response()->json([
             'message' => 'Product created successfully',
@@ -98,21 +129,52 @@ class ProductController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'category_id' => 'sometimes|exists:categories,id',
+            'category_id' => 'sometimes|integer|exists:categories,id',
             'name' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
             'price' => 'sometimes|numeric|min:0',
             'stock' => 'sometimes|integer|min:0',
             'brand' => 'nullable|string|max:255',
             'location' => 'nullable|in:Air Asin/Laut,Air Tawar,Kolam',
-            'specifications' => 'nullable|array',
+            'specifications' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $product->update($request->all());
+        // Prepare data
+        $data = $request->except('image');
+        
+        // Parse specifications from JSON string to array
+        if (isset($data['specifications']) && is_string($data['specifications'])) {
+            try {
+                $specs = json_decode($data['specifications'], true);
+                $data['specifications'] = $specs ?: [];
+            } catch (\Exception $e) {
+                $data['specifications'] = [];
+            }
+        }
+
+        // Convert to proper types
+        if (isset($data['category_id'])) $data['category_id'] = (int) $data['category_id'];
+        if (isset($data['price'])) $data['price'] = (float) $data['price'];
+        if (isset($data['stock'])) $data['stock'] = (int) $data['stock'];
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            try {
+                $file = $request->file('image');
+                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $path = $file->storeAs('products', $filename, 'public');
+                $data['image'] = '/storage/' . $path;
+            } catch (\Exception $e) {
+                return response()->json(['error' => 'Gagal upload gambar: ' . $e->getMessage()], 500);
+            }
+        }
+
+        $product->update($data);
 
         return response()->json([
             'message' => 'Product updated successfully',

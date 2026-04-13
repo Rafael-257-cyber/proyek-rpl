@@ -9,7 +9,8 @@ import {
   FaSignOutAlt,
   FaBars,
   FaTimes,
-  FaHome
+  FaHome,
+  FaChartLine
 } from 'react-icons/fa';
 
 export default function AdminLayout({ children }) {
@@ -27,6 +28,7 @@ export default function AdminLayout({ children }) {
     { icon: FaBoxes, label: 'Produk', path: '/admin/products' },
     { icon: FaClipboardList, label: 'Pesanan', path: '/admin/orders' },
     { icon: FaTag, label: 'Kategori', path: '/admin/categories' },
+    { icon: FaChartLine, label: 'Laporan Penjualan', path: '/admin/sales-report' },
   ];
 
   return (

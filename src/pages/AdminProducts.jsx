@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import AdminLayout from '../components/AdminLayout';
-import { adminAPI } from '../services/api';
+import { adminAPI, getImageUrl } from '../services/api';
 
 export default function AdminProducts() {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -21,12 +22,37 @@ export default function AdminProducts() {
     location: '',
     specifications: ''
   });
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
   const itemsPerPage = 10;
 
   useEffect(() => {
+    fetchCategories();
     fetchProducts();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      // Try public endpoint first (no auth required)
+      const res = await fetch('/api/products/filters/categories');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      console.log('Categories from public endpoint:', data);
+      setCategories(Array.isArray(data.categories) ? data.categories : []);
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
+      // Fallback to admin endpoint
+      try {
+        const res = await adminAPI.getCategories();
+        console.log('Categories from admin endpoint:', res);
+        setCategories(res.data?.categories || []);
+      } catch (adminErr) {
+        console.error('Admin categories also failed:', adminErr);
+        setCategories([]);
+      }
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -53,6 +79,8 @@ export default function AdminProducts() {
       location: '',
       specifications: ''
     });
+    setImageFile(null);
+    setImagePreview(null);
     setShowForm(true);
   };
 
@@ -68,6 +96,8 @@ export default function AdminProducts() {
       location: product.location,
       specifications: JSON.stringify(product.specifications || {})
     });
+    setImageFile(null);
+    setImagePreview(product.image ? getImageUrl(product.image) : null);
     setShowForm(true);
   };
 
@@ -82,13 +112,67 @@ export default function AdminProducts() {
     }
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const payload = {
-        ...formData,
-        specifications: formData.specifications ? JSON.parse(formData.specifications) : {}
-      };
+      // Validasi category_id
+      if (!formData.category_id) {
+        alert('Silakan pilih kategori');
+        return;
+      }
+      
+      const categoryId = parseInt(formData.category_id);
+      if (isNaN(categoryId)) {
+        alert('Category ID harus berupa angka valid');
+        return;
+      }
+      
+      const payload = new FormData();
+      
+      // Add form fields - ensure they're in correct type
+      payload.append('name', formData.name);
+      payload.append('description', formData.description);
+      payload.append('category_id', categoryId.toString()); // Send as string that can be converted to int
+      payload.append('price', parseFloat(formData.price).toString());
+      payload.append('stock', parseInt(formData.stock).toString());
+      payload.append('brand', formData.brand || '');
+      
+      // Only append location if it has a value
+      if (formData.location) {
+        payload.append('location', formData.location);
+      }
+      
+      // Always append specifications as JSON string
+      if (formData.specifications && formData.specifications.trim()) {
+        try {
+          // Validate it's valid JSON
+          JSON.parse(formData.specifications);
+          payload.append('specifications', formData.specifications);
+        } catch (e) {
+          // If not valid JSON, send empty object
+          payload.append('specifications', '{}');
+        }
+      } else {
+        payload.append('specifications', '{}');
+      }
+      
+      // Add image if exists
+      if (imageFile) {
+        payload.append('image', imageFile);
+      }
 
       if (editingId) {
         await adminAPI.updateProduct(editingId, payload);
@@ -98,8 +182,16 @@ export default function AdminProducts() {
 
       fetchProducts();
       setShowForm(false);
+      setImageFile(null);
+      setImagePreview(null);
     } catch (err) {
-      alert(err.response?.data?.message || 'Gagal menyimpan produk');
+      // Show detailed validation errors
+      const errorMsg = err.response?.data?.errors 
+        ? Object.entries(err.response.data.errors)
+            .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+            .join('\n')
+        : err.response?.data?.message || 'Gagal menyimpan produk';
+      alert(errorMsg);
     }
   };
 
@@ -240,7 +332,7 @@ export default function AdminProducts() {
         {/* Form Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div className="bg-white rounded-lg shadow-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-gray-200 px-6 py-4 flex items-center justify-between border-b">
                 <h3 className="text-lg font-bold text-gray-800">
                   {editingId ? 'Edit Produk' : 'Tambah Produk'}
@@ -248,6 +340,52 @@ export default function AdminProducts() {
                 <button onClick={() => setShowForm(false)} className="text-gray-600 hover:text-gray-800">×</button>
               </div>
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                {/* Image Upload Section */}
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <div className="flex flex-col items-center">
+                    {imagePreview ? (
+                      <div className="relative">
+                        <img 
+                          src={imagePreview} 
+                          alt="Preview" 
+                          className="w-40 h-40 object-cover rounded-lg"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageFile(null);
+                            setImagePreview(null);
+                          }}
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mb-4">
+                        <svg className="w-12 h-12 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <p className="text-gray-600 font-medium">Klik untuk upload foto produk</p>
+                        <p className="text-gray-500 text-sm">atau drag & drop</p>
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                      id="imageInput"
+                    />
+                    <label
+                      htmlFor="imageInput"
+                      className="cursor-pointer px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      Pilih Foto
+                    </label>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <input
                     type="text"
@@ -285,22 +423,25 @@ export default function AdminProducts() {
                     value={formData.location}
                     onChange={(e) => setFormData({...formData, location: e.target.value})}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
                   >
-                    <option>Pilih Lokasi</option>
-                    <option>Jakarta</option>
-                    <option>Surabaya</option>
-                    <option>Bandung</option>
-                    <option>Medan</option>
+                    <option value="">Pilih Lokasi</option>
+                    <option value="Air Asin/Laut">Air Asin/Laut</option>
+                    <option value="Air Tawar">Air Tawar</option>
+                    <option value="Kolam">Kolam</option>
                   </select>
-                  <input
-                    type="number"
-                    placeholder="Category ID"
+                  <select
                     value={formData.category_id}
                     onChange={(e) => setFormData({...formData, category_id: e.target.value})}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
-                  />
+                  >
+                    <option value="">Pilih Kategori</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <textarea
                   placeholder="Deskripsi"

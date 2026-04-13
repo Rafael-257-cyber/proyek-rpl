@@ -22,7 +22,7 @@ export default function AdminCategories() {
     try {
       setLoading(true);
       const res = await adminAPI.getCategories();
-      setCategories(res.data.data || []);
+      setCategories(res.data.categories || res.data.data || []);
     } catch (err) {
       console.error('Failed to fetch categories:', err);
       setError(err.response?.data?.message || 'Gagal memuat kategori');

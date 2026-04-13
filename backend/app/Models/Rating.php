@@ -5,27 +5,30 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class OrderItem extends Model
+class Rating extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'order_id',
+        'user_id',
         'product_id',
-        'quantity',
-        'price',
+        'order_item_id',
+        'rating',
+        'review',
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
+        'rating' => 'integer',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     /**
-     * Get order
+     * Get user
      */
-    public function order()
+    public function user()
     {
-        return $this->belongsTo(Order::class);
+        return $this->belongsTo(User::class);
     }
 
     /**
@@ -37,10 +40,10 @@ class OrderItem extends Model
     }
 
     /**
-     * Get rating
+     * Get order item
      */
-    public function rating()
+    public function orderItem()
     {
-        return $this->hasOne(Rating::class);
+        return $this->belongsTo(OrderItem::class);
     }
 }

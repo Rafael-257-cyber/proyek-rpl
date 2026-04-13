@@ -5,10 +5,12 @@ import { FiShoppingCart, FiLogOut, FiSearch, FiHeart, FiUser, FiMenu, FiX, FiChe
 import { GiFishingHook } from 'react-icons/gi';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { useWishlist } from '../context/WishlistContext';
 
 const Navbar = ({ cartCount, onCartClick, onSearch }) => {
   const { user, logout, token } = useAuth();
   const { cartItems, totalPrice } = useCart();
+  const { wishlistItems } = useWishlist();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,12 +50,10 @@ const Navbar = ({ cartCount, onCartClick, onSearch }) => {
     { label: 'Beranda', href: '/' },
     { label: 'Kategori', href: '#kategori' },
     { label: 'Lokasi Mancing', href: '#lokasi' },
-    { label: 'Promo', href: '#promo' },
-    { label: 'Blog', href: '#blog' },
   ];
 
   return (
-    <nav className="sticky top-0 z-30 bg-white shadow-md w-full">
+    <nav className="sticky top-0 z-50 bg-white shadow-md w-full">
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 w-full">
         <div className="w-full px-4 sm:px-6 lg:px-8 py-4 max-w-none">
@@ -91,8 +91,17 @@ const Navbar = ({ cartCount, onCartClick, onSearch }) => {
             {/* Right Icons */}
             <div className="flex items-center gap-4">
               {/* Wishlist */}
-              <button className="p-2 rounded-full hover:bg-gray-100 transition-colors hidden sm:block">
+              <button
+                onClick={() => navigate('/wishlist')}
+                className="relative p-2 rounded-full hover:bg-gray-100 transition-colors hidden sm:block"
+                aria-label="Wishlist"
+              >
                 <FiHeart className="text-xl text-gray-700" />
+                {wishlistItems.length > 0 && (
+                  <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                    {wishlistItems.length}
+                  </span>
+                )}
               </button>
 
               {/* Cart Button */}

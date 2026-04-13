@@ -1,6 +1,9 @@
 // src/App.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { FiTruck, FiCheckCircle, FiShield, FiMessageCircle } from 'react-icons/fi';
+import { GiFishingPole, GiFishingHook, GiFishingLure, GiFishingNet } from 'react-icons/gi';
+import { FaSync, FaToolbox } from 'react-icons/fa';
 import { useCart } from './context/CartContext';
 import { useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
@@ -12,12 +15,16 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import OTPVerificationPage from './pages/OTPVerificationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ProductDetailPage from './pages/ProductDetailPage';
 import CheckoutPage from './pages/CheckoutPage';
 import OrderTrackingPage from './pages/OrderTrackingPage';
+import MyOrdersPage from './pages/MyOrdersPage';
+import WishlistPage from './pages/WishlistPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminProducts from './pages/AdminProducts';
 import AdminOrders from './pages/AdminOrders';
 import AdminCategories from './pages/AdminCategories';
+import AdminSalesReport from './pages/AdminSalesReport';
 import { productsAPI } from './services/api';
 import { products } from './data/products';
 
@@ -35,9 +42,30 @@ function HomePage() {
     in_stock: false,
   });
   const [apiProducts, setApiProducts] = useState([]);
-  const [filteredProducts, setFilteredProducts] = useState(products);
-  const [loading, setLoading] = useState(false);
+  const [filteredProducts, setFilteredProducts] = useState([]); // Will populate from API
+  const [loading, setLoading] = useState(true);
   const { cartItems, addToCart, updateQuantity, removeFromCart, totalPrice, cartCount } = useCart();
+
+  // Fetch initial products from API
+  useEffect(() => {
+    const fetchInitialProducts = async () => {
+      try {
+        setLoading(true);
+        const response = await productsAPI.getAll({});
+        const fetchedProducts = response.data.data || [];
+        setApiProducts(fetchedProducts);
+        setFilteredProducts(fetchedProducts);
+      } catch (err) {
+        console.error('Failed to fetch initial products:', err);
+        // Fallback to local data if backend fails
+        setApiProducts(products);
+        setFilteredProducts(products);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInitialProducts();
+  }, []);
 
   const handleFilterChange = async (filters) => {
     setCurrentFilters(filters);
@@ -54,10 +82,12 @@ function HomePage() {
       if (filters.location.length > 0) params.location = filters.location;
 
       const response = await productsAPI.getAll(params);
-      setFilteredProducts(response.data.data || products);
+      const data = response.data.data || [];
+      setFilteredProducts(data);
     } catch (err) {
       console.error('Filter error:', err);
-      setFilteredProducts(products);
+      // fallback to initial apiProducts or local
+      setFilteredProducts(apiProducts.length > 0 ? apiProducts : products);
     } finally {
       setLoading(false);
     }
@@ -68,22 +98,28 @@ function HomePage() {
   };
 
   const categories = [
-    { id: 1, name: 'Joran', icon: '🎣', image: 'joran.png' },
-    { id: 2, name: 'Reel', icon: '🔄', image: 'reel.png' },
-    { id: 3, name: 'Senar', icon: '📏', image: 'senar.png' },
-    { id: 4, name: 'Umpan', icon: '🍞', image: 'umpan.png' },
-    { id: 5, name: 'Kail', icon: '🪝', image: 'kail.png' },
-    { id: 6, name: 'Aksesoris', icon: '✨', image: 'aksesoris.png' },
+    { id: 1, name: 'Joran', icon: <GiFishingPole className="w-12 h-12 mx-auto text-blue-600" />, image: 'joran.png' },
+    { id: 2, name: 'Reel', icon: <FaSync className="w-12 h-12 mx-auto text-blue-600" />, image: 'reel.png' },
+    { id: 3, name: 'Senar', icon: <GiFishingNet className="w-12 h-12 mx-auto text-blue-600" />, image: 'senar.png' },
+    { id: 4, name: 'Umpan', icon: <GiFishingLure className="w-12 h-12 mx-auto text-blue-600" />, image: 'umpan.png' },
+    { id: 5, name: 'Kail', icon: <GiFishingHook className="w-12 h-12 mx-auto text-blue-600" />, image: 'kail.png' },
+    { id: 6, name: 'Aksesoris', icon: <FaToolbox className="w-12 h-12 mx-auto text-blue-600" />, image: 'aksesoris.png' },
   ];
 
   const features = [
-    { icon: '🚚', title: 'Gratis Ongkir', subtitle: 'Min. transaksi Rp300.000' },
-    { icon: '✅', title: 'Produk Original', subtitle: '100% Original' },
-    { icon: '🔒', title: 'Garansi Resmi', subtitle: 'Garansi pabrik' },
-    { icon: '💬', title: 'CS Responsif', subtitle: '24/7 Support' },
+    { icon: <FiTruck className="w-10 h-10 mx-auto text-blue-600 mb-3" />, title: 'Gratis Ongkir', subtitle: 'Min. transaksi Rp300.000' },
+    { icon: <FiCheckCircle className="w-10 h-10 mx-auto text-green-500 mb-3" />, title: 'Produk Original', subtitle: '100% Original' },
+    { icon: <FiShield className="w-10 h-10 mx-auto text-purple-500 mb-3" />, title: 'Garansi Resmi', subtitle: 'Garansi pabrik' },
+    { icon: <FiMessageCircle className="w-10 h-10 mx-auto text-orange-500 mb-3" />, title: 'CS Responsif', subtitle: '24/7 Support' },
   ];
 
-  const bestsellers = products.slice(0, 8);
+  // Bestsellers uses top 8 products from API
+  const bestsellers = apiProducts && apiProducts.length > 0 ? apiProducts.slice(0, 8) : [];
+
+  // Debug log
+  useEffect(() => {
+    console.log('HomePage mounted. Products count:', apiProducts?.length, 'Cart count:', cartCount);
+  }, [apiProducts, cartCount]);
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
@@ -99,7 +135,7 @@ function HomePage() {
       <main className="flex-1 w-full">
         <div className="w-full px-4 sm:px-6 lg:px-8 max-w-none">
           <div className="max-w-7xl mx-auto">
-          {/* Hero Banner */}
+            {/* Hero Banner */}
           <section className="relative h-64 md:h-72 bg-gradient-to-r from-blue-600 to-blue-800 overflow-hidden rounded-2xl mt-6 mb-8">
             <div className="absolute inset-0">
               <img
@@ -131,7 +167,7 @@ function HomePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {features.map((feature, idx) => (
                 <div key={idx} className="bg-white rounded-xl shadow-md p-6 text-center hover:shadow-lg transition-shadow">
-                  <div className="text-4xl mb-3">{feature.icon}</div>
+                  {feature.icon}
                   <h3 className="font-semibold text-gray-800 mb-1">{feature.title}</h3>
                   <p className="text-sm text-gray-500">{feature.subtitle}</p>
                 </div>
@@ -253,11 +289,21 @@ function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/register/verify-otp" element={<OTPVerificationPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/product/:id" element={<ProductDetailPage />} />
+      <Route path="/wishlist" element={<WishlistPage />} />
       <Route
         path="/checkout"
         element={
           <ProtectedRoute>
             <CheckoutPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/orders"
+        element={
+          <ProtectedRoute>
+            <MyOrdersPage />
           </ProtectedRoute>
         }
       />
@@ -300,6 +346,14 @@ function App() {
         element={
           <ProtectedAdminRoute>
             <AdminCategories />
+          </ProtectedAdminRoute>
+        }
+      />
+      <Route
+        path="/admin/sales-report"
+        element={
+          <ProtectedAdminRoute>
+            <AdminSalesReport />
           </ProtectedAdminRoute>
         }
       />

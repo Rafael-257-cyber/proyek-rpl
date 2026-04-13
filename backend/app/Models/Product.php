@@ -41,4 +41,12 @@ class Product extends Model
     {
         return $this->hasMany(OrderItem::class);
     }
+
+    /**
+     * Get ratings
+     */
+    public function ratings()
+    {
+        return $this->hasMany(Rating::class);
+    }
 }

@@ -5,10 +5,12 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\RatingController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\Admin\CategoryController;
+use App\Http\Controllers\Api\Admin\ReportExportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -53,12 +55,27 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/cancel', [OrderController::class, 'cancel']);
     });
 
+    // Rating Routes (User specific)
+    Route::prefix('ratings')->group(function () {
+        Route::post('/', [RatingController::class, 'store']);
+        Route::get('/user/{orderItemId}', [RatingController::class, 'getUserRating']);
+    });
+
+    // Public Ratings
+    Route::get('ratings/product/{productId}', [RatingController::class, 'getProductRatings']);
+
     // Admin Routes - Require Admin Role
     Route::middleware('admin')->prefix('admin')->group(function () {
         // Dashboard
         Route::prefix('dashboard')->group(function () {
             Route::get('/stats', [DashboardController::class, 'getStats']);
             Route::get('/sales-chart', [DashboardController::class, 'getSalesChart']);
+        });
+
+        // Reports & Export
+        Route::prefix('reports')->group(function () {
+            Route::get('/sales/export-pdf', [ReportExportController::class, 'exportSalesPDF']);
+            Route::get('/sales/export-csv', [ReportExportController::class, 'exportSalesCSV']);
         });
 
         // Products Management

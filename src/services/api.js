@@ -5,7 +5,7 @@ const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
-    'Content-Type': 'application/json',
+    // Don't set default Content-Type - let axios auto-detect based on request body
   },
 });
 
@@ -17,6 +17,19 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Helper to format image URLs from Laravel backend
+export const getImageUrl = (imagePath) => {
+  if (!imagePath) return '/placeholder.png';
+  if (imagePath.startsWith('http')) return imagePath;
+
+  if (imagePath.startsWith('/storage/')) {
+    const baseUrl = API_URL;
+    const serverUrl = baseUrl.replace(/\/api$/, '');
+    return `${serverUrl}${imagePath}`;
+  }
+  return imagePath;
+};
 
 // Auth API
 export const authAPI = {
@@ -48,6 +61,13 @@ export const ordersAPI = {
     });
   },
   cancelOrder: (id) => api.post(`/orders/${id}/cancel`),
+  submitRating: (data) => api.post('/ratings', data),
+};
+
+// Rating API
+export const ratingsAPI = {
+  getProductRatings: (productId) => api.get(`/ratings/product/${productId}`),
+  getUserRating: (orderItemId) => api.get(`/ratings/user/${orderItemId}`),
 };
 
 // Admin API
@@ -55,6 +75,10 @@ export const adminAPI = {
   // Dashboard
   getDashboardStats: () => api.get('/admin/dashboard/stats'),
   getSalesChart: (params) => api.get('/admin/dashboard/sales-chart', { params }),
+
+  // Reports & Export
+  exportSalesPDF: (params) => api.get('/admin/reports/sales/export-pdf', { params, responseType: 'blob' }),
+  exportSalesCSV: (params) => api.get('/admin/reports/sales/export-csv', { params, responseType: 'blob' }),
 
   // Products Management
   getAdminProducts: (params) => api.get('/admin/products', { params }),
