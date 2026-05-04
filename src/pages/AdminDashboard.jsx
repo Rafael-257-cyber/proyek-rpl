@@ -128,28 +128,87 @@ export default function AdminDashboard() {
               </button>
             </div>
             
-            {/* Simple Bar Chart */}
-            <div className="h-64 flex items-end justify-between gap-2 px-4 py-8 bg-gray-50 rounded-lg">
-              {[
-                { value: 45, label: 'Jan' },
-                { value: 52, label: 'Feb' },
-                { value: 48, label: 'Mar' },
-                { value: 65, label: 'Apr' },
-                { value: 58, label: 'May' },
-                { value: 72, label: 'Jun' },
-              ].map((data, idx) => (
-                <div key={idx} className="flex flex-col items-center flex-1 group">
-                  <div
-                    className="w-full bg-blue-500 rounded-t-lg hover:bg-blue-600 transition-colors relative"
-                    style={{ height: `${(data.value / 100) * 100}%` }}
-                  >
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      {data.value}k
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-600 mt-2">{data.label}</p>
-                </div>
-              ))}
+            {/* Simple Line Chart */}
+            <div className="h-64 flex flex-col justify-end bg-gray-50 rounded-lg p-6 relative">
+              <div className="flex-1 w-full relative">
+                <svg viewBox="0 0 600 200" className="w-full h-full overflow-visible" preserveAspectRatio="none">
+                  {/* Grid Lines */}
+                  {[0, 1, 2, 3, 4].map(i => (
+                    <line key={i} x1="0" y1={i * 50} x2="600" y2={i * 50} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4 4" />
+                  ))}
+                  
+                  {/* Chart Line */}
+                  <polyline 
+                    fill="none" 
+                    stroke="#3b82f6" 
+                    strokeWidth="4" 
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points={
+                      [
+                        { value: 45, label: 'Jan' },
+                        { value: 52, label: 'Feb' },
+                        { value: 48, label: 'Mar' },
+                        { value: 65, label: 'Apr' },
+                        { value: 58, label: 'May' },
+                        { value: 72, label: 'Jun' }
+                      ].map((d, i) => `${(i / 5) * 600},${200 - (d.value / 100) * 200}`).join(' ')
+                    }
+                  />
+
+                  {/* Gradient Fill under line (Optional enhancement) */}
+                  <polygon 
+                    fill="url(#chart-gradient)" 
+                    points={
+                      `0,200 ` + 
+                      [
+                        { value: 45, label: 'Jan' },
+                        { value: 52, label: 'Feb' },
+                        { value: 48, label: 'Mar' },
+                        { value: 65, label: 'Apr' },
+                        { value: 58, label: 'May' },
+                        { value: 72, label: 'Jun' }
+                      ].map((d, i) => `${(i / 5) * 600},${200 - (d.value / 100) * 200}`).join(' ') +
+                      ` 600,200`
+                    }
+                  />
+
+                  <defs>
+                    <linearGradient id="chart-gradient" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2" />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Data Points */}
+                  {[
+                    { value: 45, label: 'Jan' },
+                    { value: 52, label: 'Feb' },
+                    { value: 48, label: 'Mar' },
+                    { value: 65, label: 'Apr' },
+                    { value: 58, label: 'May' },
+                    { value: 72, label: 'Jun' }
+                  ].map((d, i) => {
+                    const cx = (i / 5) * 600;
+                    const cy = 200 - (d.value / 100) * 200;
+                    return (
+                      <g key={i} className="group">
+                        <circle cx={cx} cy={cy} r="6" fill="#ffffff" stroke="#3b82f6" strokeWidth="3" className="cursor-pointer transition-all duration-300 hover:r-8 hover:fill-blue-500" />
+                        <text x={cx} y={cy - 15} textAnchor="middle" fill="#1f2937" className="text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                          {d.value}k
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              {/* X-Axis Labels */}
+              <div className="flex justify-between w-full mt-4 text-xs font-semibold text-gray-500 relative px-1">
+                 {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((label, i) => (
+                   <span key={i} className="text-center">{label}</span>
+                 ))}
+              </div>
             </div>
 
             {/* Chart Tab */}
