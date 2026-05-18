@@ -3,36 +3,30 @@
 namespace Database\Seeders;
 
 use App\Models\Category;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
-class CategorySeeder extends Seeder
-{
-    /**
-     * Run the database seeds.
-     */
-    public function run(): void
-    {
+class CategorySeeder extends Seeder {
+    public function run(): void {
         $categories = [
             [
-                'name' => 'Pancing Laut',
-                'description' => 'Peralatan pancing untuk memancing di laut/air asin'
+                'nama_kategori' => 'Pancing Laut',
+                'img' => null
             ],
             [
-                'name' => 'Pancing Tawar',
-                'description' => 'Peralatan pancing untuk memancing di air tawar'
+                'nama_kategori' => 'Pancing Tawar',
+                'img' => null
             ],
             [
-                'name' => 'Pancing Kolam',
-                'description' => 'Peralatan pancing untuk memancing di kolam'
+                'nama_kategori' => 'Pancing Kolam',
+                'img' => null
             ],
             [
-                'name' => 'Umpan & Spot',
-                'description' => 'Umpan dan aksesoris pemancing'
+                'nama_kategori' => 'Umpan & Spot',
+                'img' => null
             ],
             [
-                'name' => 'Perlengkapan Pemancing',
-                'description' => 'Perlengkapan dan pakaian pemancing'
+                'nama_kategori' => 'Perlengkapan Pemancing',
+                'img' => null
             ],
         ];
 
