@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSearch, FaCheckCircle, FaTimesCircle, FaEye, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import AdminLayout from '../components/AdminLayout';
-import { adminAPI } from '../services/api';
+import { adminAPI, getImageUrl } from '../services/api';
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
@@ -67,7 +67,8 @@ export default function AdminOrders() {
   };
 
   const filteredOrders = orders.filter(o => {
-    const matchesSearch = o.id.toString().includes(searchTerm) || o.user_name.toLowerCase().includes(searchTerm.toLowerCase());
+    const buyerName = o.user?.name || o.user_name || '';
+    const matchesSearch = o.id.toString().includes(searchTerm) || buyerName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = !statusFilter || o.status === statusFilter;
     return matchesSearch && matchesFilter;
   });
@@ -152,7 +153,10 @@ export default function AdminOrders() {
                 paginatedOrders.map((order) => (
                   <tr key={order.id} className="border-b hover:bg-gray-50">
                     <td className="px-6 py-3 text-gray-700 font-semibold">#{order.id}</td>
-                    <td className="px-6 py-3 text-gray-700">{order.user_name}</td>
+                    <td className="px-6 py-3 text-gray-700">
+                      <div className="font-medium">{order.user?.name || order.user_name || '-'}</div>
+                      <div className="text-xs text-gray-500">{order.user?.email || '-'}</div>
+                    </td>
                     <td className="px-6 py-3 text-gray-700 font-semibold">Rp{order.total_price?.toLocaleString('id-ID') || 0}</td>
                     <td className="px-6 py-3">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -230,7 +234,8 @@ export default function AdminOrders() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-gray-500 uppercase">Pembeli</p>
-                    <p className="font-semibold text-gray-800">{selectedOrder.user_name}</p>
+                    <p className="font-semibold text-gray-800">{selectedOrder.user?.name || selectedOrder.user_name || '-'}</p>
+                    <p className="text-xs text-gray-500 mt-1">{selectedOrder.user?.email || '-'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase">Total</p>
@@ -245,6 +250,32 @@ export default function AdminOrders() {
                     <p className="font-semibold text-gray-800">{selectedOrder.payment_status || 'pending'}</p>
                   </div>
                 </div>
+
+                {selectedOrder.bukti_bayar ? (
+                  <div className="border-t pt-4 space-y-3">
+                    <p className="font-semibold text-gray-800">Bukti Pembayaran</p>
+                    <a
+                      href={getImageUrl(selectedOrder.bukti_bayar)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block overflow-hidden rounded-lg border border-gray-200 bg-gray-50 hover:border-blue-300"
+                    >
+                      <img
+                        src={getImageUrl(selectedOrder.bukti_bayar)}
+                        alt={`Bukti pembayaran pesanan ${selectedOrder.id}`}
+                        className="h-64 w-full object-contain bg-white"
+                      />
+                    </a>
+                    <p className="text-xs text-gray-500">
+                      Diunggah oleh: {selectedOrder.payment_proof_uploaded_by || 'user'}
+                      {selectedOrder.payment_proof_uploaded_at ? ` · ${new Date(selectedOrder.payment_proof_uploaded_at).toLocaleString('id-ID')}` : ''}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="border-t pt-4">
+                    <p className="text-sm text-gray-500">Belum ada bukti pembayaran yang diunggah.</p>
+                  </div>
+                )}
 
                 {/* Payment Verification */}
                 {!selectedOrder.payment_status || selectedOrder.payment_status === 'rejected' ? (

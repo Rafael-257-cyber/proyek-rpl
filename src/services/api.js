@@ -23,12 +23,15 @@ export const getImageUrl = (imagePath) => {
   if (!imagePath) return '/placeholder.png';
   if (imagePath.startsWith('http')) return imagePath;
 
-  if (imagePath.startsWith('/storage/')) {
-    const baseUrl = API_URL;
-    const serverUrl = baseUrl.replace(/\/api$/, '');
-    return `${serverUrl}${imagePath}`;
+  const baseUrl = API_URL;
+  const serverUrl = baseUrl.replace(/\/api$/, '');
+  const normalizedPath = imagePath.replace(/^\/+/, '');
+
+  if (normalizedPath.startsWith('storage/')) {
+    return `${serverUrl}/${normalizedPath}`;
   }
-  return imagePath;
+
+  return `${serverUrl}/storage/${normalizedPath}`;
 };
 
 // Auth API

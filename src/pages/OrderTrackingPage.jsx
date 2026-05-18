@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { FiChevronRight, FiCheck, FiTruck, FiPackage, FiClock } from 'react-icons/fi';
+import { FiChevronRight, FiCheck, FiTruck, FiPackage, FiClock, FiUpload } from 'react-icons/fi';
 import { FaEdit } from 'react-icons/fa';
 import { ordersAPI, getImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,12 @@ export default function OrderTrackingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [ratingModal, setRatingModal] = useState({ isOpen: false, item: null });
+  const [paymentProofFile, setPaymentProofFile] = useState(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [proofUploaded, setProofUploaded] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const pollingTimerRef = useRef(null);
 
   // Scroll to top on mount
   useEffect(() => {
@@ -23,24 +29,49 @@ export default function OrderTrackingPage() {
   }, []);
 
   // Redirect if not authenticated
+  const loadOrder = async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+
+    try {
+      const response = await ordersAPI.getOrder(orderId);
+      const fetchedOrder = response.data.order || response.data;
+      setOrder(fetchedOrder);
+      setProofUploaded(Boolean(fetchedOrder.bukti_bayar));
+      setError('');
+
+      if (['delivered', 'cancelled'].includes(fetchedOrder.status) && pollingTimerRef.current) {
+        clearInterval(pollingTimerRef.current);
+        pollingTimerRef.current = null;
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Pesanan tidak ditemukan');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) {
       navigate('/login');
       return;
     }
 
-    const fetchOrder = async () => {
-      try {
-        const response = await ordersAPI.getOrder(orderId);
-        setOrder(response.data.order || response.data);
-      } catch (err) {
-        setError(err.response?.data?.message || 'Pesanan tidak ditemukan');
-      } finally {
-        setLoading(false);
+    loadOrder();
+    pollingTimerRef.current = setInterval(() => {
+      loadOrder({ silent: true });
+    }, 15000);
+
+    return () => {
+      if (pollingTimerRef.current) {
+        clearInterval(pollingTimerRef.current);
+        pollingTimerRef.current = null;
       }
     };
-
-    fetchOrder();
   }, [orderId, token, navigate]);
 
   const getStatusColor = (status) => {
@@ -107,6 +138,37 @@ export default function OrderTrackingPage() {
     }).format(price);
   };
 
+  const subtotal = order?.items?.reduce((total, item) => total + ((Number(item.price) || 0) * (Number(item.quantity) || 0)), 0) || 0;
+  const shippingCost = Number(order?.ongkir || 0);
+  const grandTotal = Number(order?.total_price || subtotal + shippingCost);
+  const canUploadProof = order && ['pending_payment', 'pending_verification'].includes(order.status);
+  const proofUploadLocked = proofUploaded || Boolean(order?.bukti_bayar);
+
+  const handleUploadProof = async () => {
+    if (proofUploadLocked) {
+      return;
+    }
+
+    if (!paymentProofFile) {
+      setError('Pilih file bukti pembayaran terlebih dahulu');
+      return;
+    }
+
+    try {
+      setUploadingProof(true);
+      setError('');
+      const response = await ordersAPI.uploadPaymentProof(order.id, paymentProofFile);
+      setPaymentProofFile(null);
+      setProofUploaded(true);
+      setSuccessMessage(response.data?.message || 'Bukti pembayaran berhasil dikirimkan');
+      await loadOrder({ silent: true });
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal mengunggah bukti pembayaran');
+    } finally {
+      setUploadingProof(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
@@ -169,6 +231,13 @@ export default function OrderTrackingPage() {
                   </div>
                 </div>
 
+                {refreshing && (
+                  <div className="mb-4 flex items-center gap-2 text-xs text-gray-500">
+                    <FiClock className="w-4 h-4" />
+                    Memeriksa pembaruan status...
+                  </div>
+                )}
+
                 {/* Products */}
                 <div className="mb-6 pb-6 border-b border-gray-200">
                   <div className="flex items-center gap-3 mb-4">
@@ -201,12 +270,65 @@ export default function OrderTrackingPage() {
                     {order.items?.length || 0} Produk
                   </p>
                   <p className="text-lg font-bold text-gray-900">
-                    {formatPrice(order.total_amount || order.total || 0)}
+                    {formatPrice(grandTotal)}
                   </p>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 mb-6">
+                  <div>
+                    <p className="text-gray-500">Metode Pembayaran</p>
+                    <p className="font-medium text-gray-800">{order.payment_method || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Batas Pembayaran</p>
+                    <p className="font-medium text-gray-800">{formatDate(order.payment_due_at)}</p>
+                  </div>
+                </div>
+
+                {canUploadProof && order.payment_method !== 'cod' && (
+                  <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                    <h3 className="font-semibold text-blue-900 mb-2">Unggah Bukti Pembayaran</h3>
+                    <p className="text-sm text-blue-800 mb-3">
+                      Unggah foto bukti transfer agar pesanan dapat diverifikasi lebih cepat.
+                    </p>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/jpg"
+                        disabled={proofUploadLocked}
+                        onChange={(e) => setPaymentProofFile(e.target.files?.[0] || null)}
+                        className="block w-full text-sm text-gray-600 disabled:cursor-not-allowed disabled:opacity-60 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-white hover:file:bg-blue-700"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleUploadProof}
+                        disabled={uploadingProof || proofUploadLocked}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <FiUpload className="w-4 h-4" />
+                        {proofUploadLocked ? 'Bukti Terkirim' : uploadingProof ? 'Mengunggah...' : 'Upload Bukti'}
+                      </button>
+                    </div>
+                    {!proofUploadLocked && paymentProofFile && (
+                      <p className="mt-2 text-xs text-blue-700">File dipilih: {paymentProofFile.name}</p>
+                    )}
+                    {proofUploadLocked && (
+                      <p className="mt-2 text-xs font-medium text-green-700">
+                        Bukti pembayaran sudah dikirim dan tombol upload dinonaktifkan.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {order.bukti_bayar && (
+                  <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                    <p className="font-semibold text-gray-900 mb-1">Bukti Pembayaran Terkirim</p>
+                    <p>File: {order.bukti_bayar.split('/').pop()}</p>
+                  </div>
+                )}
+
                 {/* Shipping Info */}
-                {order.status !== 'pending' && (
+                {['processing', 'shipped', 'delivered'].includes(order.status) && (
                   <div>
                     <h3 className="font-semibold text-gray-800 mb-4">Informasi Pengiriman</h3>
                     <div className="space-y-2 text-sm text-gray-600">
@@ -316,15 +438,15 @@ export default function OrderTrackingPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-gray-600">
                     <span>Subtotal</span>
-                    <span>{formatPrice(order.subtotal || 0)}</span>
+                    <span>{formatPrice(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>Ongkir</span>
-                    <span>{formatPrice(order.shipping_cost || 0)}</span>
+                    <span>{formatPrice(shippingCost)}</span>
                   </div>
                   <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between font-bold text-gray-900">
                     <span>Total</span>
-                    <span>{formatPrice(order.total_amount || order.total || 0)}</span>
+                    <span>{formatPrice(grandTotal)}</span>
                   </div>
                 </div>
               </div>
@@ -334,6 +456,25 @@ export default function OrderTrackingPage() {
       </main>
 
       <Footer />
+
+      {successMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
+              <FiCheck className="h-6 w-6" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900">Bukti pembayaran terkirim</h3>
+            <p className="mt-2 text-sm text-gray-600">{successMessage}</p>
+            <button
+              type="button"
+              onClick={() => setSuccessMessage('')}
+              className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Rating Modal */}
       <RatingModal

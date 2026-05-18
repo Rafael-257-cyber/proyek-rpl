@@ -31,13 +31,20 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await authAPI.register({ name, email, password });
+      const response = await authAPI.register({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+      });
       localStorage.setItem('authToken', response.data.token);
       setToken(response.data.token);
       setUser(response.data.user);
       return response.data;
     } catch (err) {
-      const message = err.response?.data?.message || 'Registration failed';
+      const validationErrors = err.response?.data?.errors;
+      const message = err.response?.data?.message
+        || (validationErrors ? Object.values(validationErrors).flat().join(' ') : null)
+        || 'Registration failed';
       setError(message);
       throw err;
     } finally {

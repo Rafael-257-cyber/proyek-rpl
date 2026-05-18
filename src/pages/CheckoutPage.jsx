@@ -62,6 +62,12 @@ export default function CheckoutPage() {
   const handleCheckout = async (e) => {
     e.preventDefault();
 
+    if (cartItems.length === 0) {
+      setError('Keranjang masih kosong');
+      window.scrollTo(0, 0);
+      return;
+    }
+
     // Validation
     if (!formData.shipping_name.trim()) {
       setError('Nama pengiriman harus diisi');
@@ -100,6 +106,7 @@ export default function CheckoutPage() {
         shipping_phone: formData.shipping_phone,
         shipping_name: formData.shipping_name,
         payment_method: formData.payment_method,
+        shipping_cost: shippingCost,
         items: cartItems.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
@@ -381,7 +388,7 @@ export default function CheckoutPage() {
                   {/* Button */}
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || cartItems.length === 0}
                     className="w-full mt-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors"
                   >
                     {loading ? 'Memproses...' : 'Lanjut ke Pembayaran'}

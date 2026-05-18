@@ -48,8 +48,8 @@ const Navbar = ({ cartCount, onCartClick, onSearch }) => {
 
   const menuItems = [
     { label: 'Beranda', href: '/' },
-    { label: 'Kategori', href: '#kategori' },
-    { label: 'Lokasi Mancing', href: '#lokasi' },
+    { label: 'Kategori', href: '/categories' },
+    { label: 'Lokasi Mancing', href: '/locations' },
   ];
 
   return (

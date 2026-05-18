@@ -13,13 +13,14 @@ import CartDrawer from './components/CartDrawer';
 import Footer from './components/Footer';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import OTPVerificationPage from './pages/OTPVerificationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import CheckoutPage from './pages/CheckoutPage';
 import OrderTrackingPage from './pages/OrderTrackingPage';
 import MyOrdersPage from './pages/MyOrdersPage';
 import WishlistPage from './pages/WishlistPage';
+import CategoriesPage from './pages/CategoriesPage';
+import LocationsPage from './pages/LocationsPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminProducts from './pages/AdminProducts';
 import AdminOrders from './pages/AdminOrders';
@@ -81,11 +82,18 @@ function HomePage() {
       if (filters.in_stock) params.in_stock = 'true';
       if (filters.location.length > 0) params.location = filters.location;
 
+      // Debug log untuk melihat params yang dikirim
+      console.log('API Call with params:', params);
+      
       const response = await productsAPI.getAll(params);
-      const data = response.data.data || [];
+      console.log('API Response:', response);
+      
+      const data = response.data.data || response.data || [];
+      console.log('Filtered products count:', data.length);
       setFilteredProducts(data);
     } catch (err) {
       console.error('Filter error:', err);
+      console.error('Error details:', err.response?.data);
       // fallback to initial apiProducts or local
       setFilteredProducts(apiProducts.length > 0 ? apiProducts : products);
     } finally {
@@ -287,9 +295,10 @@ function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/register/verify-otp" element={<OTPVerificationPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/product/:id" element={<ProductDetailPage />} />
+      <Route path="/categories" element={<CategoriesPage />} />
+      <Route path="/locations" element={<LocationsPage />} />
       <Route path="/wishlist" element={<WishlistPage />} />
       <Route
         path="/checkout"

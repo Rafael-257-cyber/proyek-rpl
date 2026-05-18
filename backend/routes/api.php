@@ -31,11 +31,14 @@ Route::prefix('auth')->group(function () {
 
 // Product Routes (Public - No Auth)
 Route::prefix('products')->group(function () {
-    Route::get('/', [ProductController::class, 'index']);
-    Route::get('/{id}', [ProductController::class, 'show']);
+    // Filter routes MUST come before {id} route to avoid matching 'filters' as an ID
     Route::get('/filters/categories', [ProductController::class, 'categories']);
     Route::get('/filters/locations', [ProductController::class, 'locations']);
     Route::get('/filters/brands', [ProductController::class, 'brands']);
+    
+    // Generic routes
+    Route::get('/', [ProductController::class, 'index']);
+    Route::get('/{id}', [ProductController::class, 'show']);
 });
 
 // Protected Routes - Require Authentication
@@ -102,6 +105,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/{id}', [AdminOrderController::class, 'show']);
             Route::post('/{id}/verify-payment', [AdminOrderController::class, 'verifyPayment']);
             Route::post('/{id}/reject-payment', [AdminOrderController::class, 'rejectPayment']);
+            Route::post('/{id}/upload-proof', [AdminOrderController::class, 'uploadProof']);
             Route::put('/{id}/status', [AdminOrderController::class, 'updateStatus']);
             Route::post('/{id}/cancel', [AdminOrderController::class, 'cancel']);
         });

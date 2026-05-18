@@ -39,20 +39,26 @@ export default function RegisterPage() {
     e.preventDefault();
     setErrors({});
 
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+
     // Validation
-    if (!name) setErrors((prev) => ({ ...prev, name: 'Nama diperlukan' }));
-    if (!email) setErrors((prev) => ({ ...prev, email: 'Email diperlukan' }));
+    if (!trimmedName) setErrors((prev) => ({ ...prev, name: 'Nama diperlukan' }));
+    if (!trimmedEmail) setErrors((prev) => ({ ...prev, email: 'Email diperlukan' }));
     if (!password) setErrors((prev) => ({ ...prev, password: 'Password diperlukan' }));
+    if (password && password.length < 6) {
+      setErrors((prev) => ({ ...prev, password: 'Password minimal 6 karakter' }));
+    }
     if (password !== confirmPassword) {
       setErrors((prev) => ({ ...prev, confirmPassword: 'Password tidak cocok' }));
     }
 
-    if (!name || !email || !password || password !== confirmPassword) return;
+    if (!trimmedName || !trimmedEmail || !password || password.length < 6 || password !== confirmPassword) return;
 
     try {
-      await register(name, email, password);
-      // Redirect ke OTP verification page dengan pass email
-      navigate('/register/verify-otp', { state: { email } });
+      await register(trimmedName, trimmedEmail, password);
+      // Untuk sementara langsung masuk ke login agar alur register -> login -> checkout bisa dites
+      navigate('/login', { state: { email: trimmedEmail, registered: true } });
     } catch (err) {
       // Error is handled by useAuth
     }
