@@ -158,6 +158,13 @@ const Navbar = ({ cartCount, onCartClick, onSearch }) => {
                       </div>
                       <div className="py-2">
                         <Link
+                          to="/profile"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors font-medium border-b border-gray-50 pb-2 mb-1"
+                        >
+                          Edit Profil
+                        </Link>
+                        <Link
                           to="/orders"
                           onClick={() => setIsUserMenuOpen(false)}
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -244,6 +251,72 @@ const Navbar = ({ cartCount, onCartClick, onSearch }) => {
                 {item.label}
               </Link>
             ))}
+
+            {/* Mobile User Menu Items */}
+            {token && (
+              <div className="w-full border-t border-gray-100 mt-2 pt-2 lg:hidden space-y-1">
+                <p className="px-2 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Akun Saya</p>
+                <Link
+                  to="/profile"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-gray-700 font-medium hover:text-blue-600 transition-colors py-2 px-2"
+                >
+                  Edit Profil
+                </Link>
+                <Link
+                  to="/orders"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-gray-700 font-medium hover:text-blue-600 transition-colors py-2 px-2"
+                >
+                  Pesanan Saya
+                </Link>
+                <Link
+                  to="/wishlist"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-gray-700 font-medium hover:text-blue-600 transition-colors py-2 px-2"
+                >
+                  Wishlist
+                </Link>
+                {user?.role === 'admin' && (
+                  <Link
+                    to="/admin/dashboard"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block text-purple-600 font-medium hover:text-purple-700 transition-colors py-2 px-2"
+                  >
+                    Dashboard Admin
+                  </Link>
+                )}
+                <button
+                  onClick={() => {
+                    logout();
+                    setIsMobileMenuOpen(false);
+                    navigate('/login');
+                  }}
+                  className="w-full text-left text-red-600 font-medium hover:text-red-700 transition-colors py-2 px-2 flex items-center gap-2 border-t border-gray-50 mt-2 pt-2"
+                >
+                  <FiLogOut size={16} />
+                  Logout
+                </button>
+              </div>
+            )}
+            {!token && (
+              <div className="w-full border-t border-gray-100 mt-2 pt-2 lg:hidden space-y-1">
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-blue-600 font-medium hover:text-blue-700 transition-colors py-2 px-2"
+                >
+                  Masuk
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-gray-700 font-medium hover:text-blue-600 transition-colors py-2 px-2"
+                >
+                  Daftar
+                </Link>
+              </div>
+            )}
           </div>
           </div>
         </div>

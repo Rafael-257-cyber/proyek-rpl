@@ -296,7 +296,6 @@ export default function AdminSalesReport() {
                       <circle
                         cx={x}
                         cy={y}
-                        r="5"
                         fill="#3b82f6"
                         opacity="0.2"
                         r="10"

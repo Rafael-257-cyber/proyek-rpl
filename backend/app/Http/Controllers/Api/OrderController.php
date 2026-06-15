@@ -22,11 +22,15 @@ class OrderController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
+            'shipping_name' => 'required|string',
             'shipping_address' => 'required|string',
             'shipping_city' => 'required|string',
             'shipping_phone' => 'required|string',
             'payment_method' => 'required|in:transfer,cod,ewallet',
             'shipping_cost' => 'nullable|numeric|min:0',
+            'shipping_courier' => 'nullable|string|max:100',
+            'shipping_service' => 'nullable|string|max:100',
+            'shipping_estimate' => 'nullable|string|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -58,6 +62,7 @@ class OrderController extends Controller
 
                 $order = Order::create([
                     'user_id' => $request->user()->id,
+                    'shipping_name' => $request->shipping_name,
                     'total_price' => $subtotal + $shippingCost,
                     'ongkir' => $shippingCost,
                     'status' => 'pending_payment',
@@ -66,6 +71,9 @@ class OrderController extends Controller
                     'shipping_address' => $request->shipping_address,
                     'shipping_city' => $request->shipping_city,
                     'shipping_phone' => $request->shipping_phone,
+                    'shipping_courier' => $request->shipping_courier,
+                    'shipping_service' => $request->shipping_service,
+                    'shipping_estimate' => $request->shipping_estimate,
                     'payment_due_at' => now()->addHours(24),
                 ]);
 
@@ -140,6 +148,11 @@ class OrderController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'payment_proof' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+        ], [
+            'payment_proof.required' => 'Pilih file bukti pembayaran terlebih dahulu.',
+            'payment_proof.image' => 'Bukti pembayaran harus berupa gambar.',
+            'payment_proof.mimes' => 'Bukti pembayaran harus berformat JPG, JPEG, atau PNG.',
+            'payment_proof.max' => 'Ukuran bukti pembayaran maksimal 2 MB.',
         ]);
 
         if ($validator->fails()) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import AdminLayout from '../components/AdminLayout';
-import { adminAPI, getImageUrl } from '../services/api';
+import { adminAPI, productsAPI, getImageUrl } from '../services/api';
 
 export default function AdminProducts() {
   const [products, setProducts] = useState([]);
@@ -32,23 +32,29 @@ export default function AdminProducts() {
     fetchProducts();
   }, []);
 
+  const normalizeCategories = (payload) => {
+    const rawCategories = payload?.categories || payload?.data || payload || [];
+    if (!Array.isArray(rawCategories)) return [];
+
+    return rawCategories
+      .map((category) => ({
+        id: category.id ?? category.id_kategori,
+        name: category.name ?? category.nama_kategori,
+      }))
+      .filter((category) => category.id && category.name);
+  };
+
   const fetchCategories = async () => {
     try {
-      // Try public endpoint first (no auth required)
-      const res = await fetch('/api/products/filters/categories');
-      if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
-      console.log('Categories from public endpoint:', data);
-      setCategories(Array.isArray(data.categories) ? data.categories : []);
+      const res = await adminAPI.getCategories();
+      setCategories(normalizeCategories(res.data));
     } catch (err) {
       console.error('Failed to fetch categories:', err);
-      // Fallback to admin endpoint
       try {
-        const res = await adminAPI.getCategories();
-        console.log('Categories from admin endpoint:', res);
-        setCategories(res.data?.categories || []);
+        const res = await productsAPI.getCategories();
+        setCategories(normalizeCategories(res.data));
       } catch (adminErr) {
-        console.error('Admin categories also failed:', adminErr);
+        console.error('Public categories also failed:', adminErr);
         setCategories([]);
       }
     }
@@ -435,7 +441,7 @@ export default function AdminProducts() {
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   >
-                    <option value="">Pilih Kategori</option>
+                    <option value="">{categories.length ? 'Pilih Kategori' : 'Kategori belum tersedia'}</option>
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>
                         {cat.name}

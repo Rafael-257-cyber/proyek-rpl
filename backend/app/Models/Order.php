@@ -12,6 +12,7 @@ class Order extends Model
     protected $fillable = [
         // English fields
         'user_id',
+        'shipping_name',
         'total_price',
         'status',
         'payment_method',
@@ -19,6 +20,9 @@ class Order extends Model
         'shipping_address',
         'shipping_city',
         'shipping_phone',
+        'shipping_courier',
+        'shipping_service',
+        'shipping_estimate',
         'tracking_number',
         'shipped_at',
         'delivered_at',

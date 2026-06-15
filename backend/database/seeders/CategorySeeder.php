@@ -9,29 +9,32 @@ class CategorySeeder extends Seeder {
     public function run(): void {
         $categories = [
             [
-                'nama_kategori' => 'Pancing Laut',
-                'img' => null
+                'name' => 'Pancing Laut',
+                'description' => 'Peralatan pancing untuk memancing di laut/air asin',
             ],
             [
-                'nama_kategori' => 'Pancing Tawar',
-                'img' => null
+                'name' => 'Pancing Tawar',
+                'description' => 'Peralatan pancing untuk memancing di air tawar',
             ],
             [
-                'nama_kategori' => 'Pancing Kolam',
-                'img' => null
+                'name' => 'Pancing Kolam',
+                'description' => 'Peralatan pancing untuk memancing di kolam',
             ],
             [
-                'nama_kategori' => 'Umpan & Spot',
-                'img' => null
+                'name' => 'Umpan & Spot',
+                'description' => 'Umpan dan aksesoris pemancing',
             ],
             [
-                'nama_kategori' => 'Perlengkapan Pemancing',
-                'img' => null
+                'name' => 'Perlengkapan Pemancing',
+                'description' => 'Perlengkapan dan pakaian pemancing',
             ],
         ];
 
         foreach ($categories as $category) {
-            Category::create($category);
+            Category::updateOrCreate(
+                ['name' => $category['name']],
+                $category
+            );
         }
     }
 }

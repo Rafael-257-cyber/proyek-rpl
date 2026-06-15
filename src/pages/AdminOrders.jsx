@@ -171,11 +171,15 @@ export default function AdminOrders() {
                     </td>
                     <td className="px-6 py-3">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        order.payment_status === 'verified' ? 'bg-green-100 text-green-700' :
-                        order.payment_status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        order.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
+                        order.payment_status === 'pending_verification' ? 'bg-blue-100 text-blue-700' :
+                        order.payment_status === 'failed' ? 'bg-red-100 text-red-700' :
                         'bg-yellow-100 text-yellow-700'
                       }`}>
-                        {order.payment_status || 'pending'}
+                        {order.payment_status === 'paid' ? 'Lunas' :
+                         order.payment_status === 'pending_verification' ? 'Menunggu Verifikasi' :
+                         order.payment_status === 'failed' ? 'Gagal/Ditolak' :
+                         'Belum Bayar'}
                       </span>
                     </td>
                     <td className="px-6 py-3 text-gray-600 text-xs">{new Date(order.created_at).toLocaleDateString('id-ID')}</td>
@@ -233,9 +237,16 @@ export default function AdminOrders() {
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-gray-500 uppercase">Pembeli</p>
+                    <p className="text-xs text-gray-500 uppercase">Pembeli (Akun)</p>
                     <p className="font-semibold text-gray-800">{selectedOrder.user?.name || selectedOrder.user_name || '-'}</p>
                     <p className="text-xs text-gray-500 mt-1">{selectedOrder.user?.email || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase">Nama Penerima</p>
+                    <p className="font-semibold text-gray-800">
+                      {selectedOrder.shipping_name || selectedOrder.user?.name || selectedOrder.user_name || '-'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">{selectedOrder.shipping_phone || '-'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase">Total</p>
@@ -247,7 +258,38 @@ export default function AdminOrders() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase">Status Pembayaran</p>
-                    <p className="font-semibold text-gray-800">{selectedOrder.payment_status || 'pending'}</p>
+                    <p className="font-semibold text-gray-800">
+                      {selectedOrder.payment_status === 'paid' ? 'Lunas' :
+                       selectedOrder.payment_status === 'pending_verification' ? 'Menunggu Verifikasi' :
+                       selectedOrder.payment_status === 'failed' ? 'Gagal/Ditolak' :
+                       'Belum Bayar'}
+                    </p>
+                  </div>
+                  {selectedOrder.shipping_courier && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Ekspedisi</p>
+                      <p className="font-semibold text-gray-800">
+                        {selectedOrder.shipping_courier}
+                        {selectedOrder.shipping_service && (
+                          <span className="text-gray-500 font-normal"> – {selectedOrder.shipping_service}</span>
+                        )}
+                      </p>
+                      {selectedOrder.shipping_estimate && (
+                        <p className="text-xs text-blue-600 mt-0.5">{selectedOrder.shipping_estimate}</p>
+                      )}
+                    </div>
+                  )}
+                  {selectedOrder.tracking_number && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">No. Resi</p>
+                      <p className="font-semibold text-gray-800 font-mono text-sm">{selectedOrder.tracking_number}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase">Alamat Pengiriman</p>
+                    <p className="font-semibold text-gray-800 text-sm">
+                      {selectedOrder.shipping_address || '-'}{selectedOrder.shipping_city ? ', ' + selectedOrder.shipping_city : ''}
+                    </p>
                   </div>
                 </div>
 
@@ -278,7 +320,7 @@ export default function AdminOrders() {
                 )}
 
                 {/* Payment Verification */}
-                {!selectedOrder.payment_status || selectedOrder.payment_status === 'rejected' ? (
+                {selectedOrder.payment_status === 'pending_verification' ? (
                   <div className="border-t pt-4 space-y-3">
                     <p className="font-semibold text-gray-800">Verifikasi Pembayaran</p>
                     <div className="flex gap-2">

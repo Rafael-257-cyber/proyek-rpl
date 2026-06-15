@@ -14,7 +14,8 @@ export default function OrderTrackingPage() {
   const { user, token } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [pageError, setPageError] = useState('');
+  const [proofError, setProofError] = useState('');
   const [ratingModal, setRatingModal] = useState({ isOpen: false, item: null });
   const [paymentProofFile, setPaymentProofFile] = useState(null);
   const [uploadingProof, setUploadingProof] = useState(false);
@@ -41,14 +42,14 @@ export default function OrderTrackingPage() {
       const fetchedOrder = response.data.order || response.data;
       setOrder(fetchedOrder);
       setProofUploaded(Boolean(fetchedOrder.bukti_bayar));
-      setError('');
+      setPageError('');
 
       if (['delivered', 'cancelled'].includes(fetchedOrder.status) && pollingTimerRef.current) {
         clearInterval(pollingTimerRef.current);
         pollingTimerRef.current = null;
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Pesanan tidak ditemukan');
+      setPageError(err.response?.data?.message || 'Pesanan tidak ditemukan');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -144,26 +145,42 @@ export default function OrderTrackingPage() {
   const canUploadProof = order && ['pending_payment', 'pending_verification'].includes(order.status);
   const proofUploadLocked = proofUploaded || Boolean(order?.bukti_bayar);
 
+  const getUploadErrorMessage = (err) => {
+    const data = err.response?.data;
+    if (data?.message) return data.message;
+
+    if (data?.errors) {
+      const firstError = Object.values(data.errors).flat().find(Boolean);
+      if (firstError) return firstError;
+    }
+
+    if (err.response?.status === 413) {
+      return 'Ukuran file terlalu besar. Gunakan gambar yang lebih kecil.';
+    }
+
+    return 'Gagal mengunggah bukti pembayaran';
+  };
+
   const handleUploadProof = async () => {
     if (proofUploadLocked) {
       return;
     }
 
     if (!paymentProofFile) {
-      setError('Pilih file bukti pembayaran terlebih dahulu');
+      setProofError('Pilih file bukti pembayaran terlebih dahulu');
       return;
     }
 
     try {
       setUploadingProof(true);
-      setError('');
+      setProofError('');
       const response = await ordersAPI.uploadPaymentProof(order.id, paymentProofFile);
       setPaymentProofFile(null);
       setProofUploaded(true);
       setSuccessMessage(response.data?.message || 'Bukti pembayaran berhasil dikirimkan');
       await loadOrder({ silent: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal mengunggah bukti pembayaran');
+      setProofError(getUploadErrorMessage(err));
     } finally {
       setUploadingProof(false);
     }
@@ -183,13 +200,13 @@ export default function OrderTrackingPage() {
     );
   }
 
-  if (error || !order) {
+  if (pageError || !order) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
         <Navbar />
         <main className="flex-1 w-full px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto py-12 text-center">
-            <p className="text-red-600 mb-4">{error}</p>
+            <p className="text-red-600 mb-4">{pageError}</p>
             <Link to="/orders" className="text-blue-600 hover:text-blue-700 font-medium">
               Kembali ke Pesanan Saya
             </Link>
@@ -283,6 +300,21 @@ export default function OrderTrackingPage() {
                     <p className="text-gray-500">Batas Pembayaran</p>
                     <p className="font-medium text-gray-800">{formatDate(order.payment_due_at)}</p>
                   </div>
+                  {order.shipping_courier && (
+                    <div>
+                      <p className="text-gray-500">Ekspedisi</p>
+                      <p className="font-medium text-gray-800">
+                        {order.shipping_courier}
+                        {order.shipping_service && ` – ${order.shipping_service}`}
+                      </p>
+                    </div>
+                  )}
+                  {order.shipping_estimate && (
+                    <div>
+                      <p className="text-gray-500">Estimasi Tiba</p>
+                      <p className="font-medium text-gray-800">{order.shipping_estimate}</p>
+                    </div>
+                  )}
                 </div>
 
                 {canUploadProof && order.payment_method !== 'cod' && (
@@ -312,6 +344,9 @@ export default function OrderTrackingPage() {
                     {!proofUploadLocked && paymentProofFile && (
                       <p className="mt-2 text-xs text-blue-700">File dipilih: {paymentProofFile.name}</p>
                     )}
+                    {proofError && (
+                      <p className="mt-2 text-xs font-medium text-red-700">{proofError}</p>
+                    )}
                     {proofUploadLocked && (
                       <p className="mt-2 text-xs font-medium text-green-700">
                         Bukti pembayaran sudah dikirim dan tombol upload dinonaktifkan.
@@ -329,21 +364,33 @@ export default function OrderTrackingPage() {
 
                 {/* Shipping Info */}
                 {['processing', 'shipped', 'delivered'].includes(order.status) && (
-                  <div>
-                    <h3 className="font-semibold text-gray-800 mb-4">Informasi Pengiriman</h3>
-                    <div className="space-y-2 text-sm text-gray-600">
-                      <div>
-                        <span className="font-medium text-gray-800">Kurir: </span>
-                        {order.shipping_method || 'JNE Express'}
+                  <div className="pt-2 border-t border-gray-100">
+                    <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                      <FiTruck className="w-5 h-5 text-blue-600" />
+                      Informasi Pengiriman
+                    </h3>
+                    <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Ekspedisi</span>
+                        <span className="font-semibold text-gray-800">
+                          {order.shipping_courier
+                            ? `${order.shipping_courier}${order.shipping_service ? ' – ' + order.shipping_service : ''}`
+                            : '-'}
+                        </span>
                       </div>
-                      <div>
-                        <span className="font-medium text-gray-800">No. Resi: </span>
-                        {order.tracking_number || 'JNE-1234567890'}
+                      {order.shipping_estimate && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Estimasi</span>
+                          <span className="font-medium text-gray-800">{order.shipping_estimate}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">No. Resi</span>
+                        <span className="font-medium text-gray-800">
+                          {order.tracking_number || 'Belum tersedia'}
+                        </span>
                       </div>
                     </div>
-                    <button className="text-blue-600 text-sm font-medium hover:text-blue-700 mt-3">
-                      Lihat Detail →
-                    </button>
                   </div>
                 )}
               </div>
@@ -441,7 +488,12 @@ export default function OrderTrackingPage() {
                     <span>{formatPrice(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-gray-600">
-                    <span>Ongkir</span>
+                    <span>
+                      Ongkir
+                      {order.shipping_courier && (
+                        <span className="ml-1 text-xs font-medium text-blue-600">({order.shipping_courier})</span>
+                      )}
+                    </span>
                     <span>{formatPrice(shippingCost)}</span>
                   </div>
                   <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between font-bold text-gray-900">

@@ -118,7 +118,10 @@ class OrderController extends Controller
             $product->update(['stock' => $product->stock + $item->quantity]);
         }
 
-        $order->update(['status' => 'pending_payment']);
+        $order->update([
+            'status' => 'pending_payment',
+            'payment_status' => 'failed',
+        ]);
 
         $this->notifyOrderUser(
             $order->fresh('user'),
@@ -193,6 +196,11 @@ class OrderController extends Controller
         }
 
         $updateData = ['status' => $request->status];
+
+        // Automatically set payment status to paid if status is progressing
+        if (in_array($request->status, ['payment_confirmed', 'processing', 'shipped', 'delivered'])) {
+            $updateData['payment_status'] = 'paid';
+        }
 
         if ($request->status === 'shipped' && $request->tracking_number) {
             $updateData['tracking_number'] = $request->tracking_number;

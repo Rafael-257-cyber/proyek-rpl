@@ -82,8 +82,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateProfile = async (name, email, password) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await authAPI.updateProfile({ name, email, password });
+      setUser(response.data.user);
+      return response.data;
+    } catch (err) {
+      const validationErrors = err.response?.data?.errors;
+      const message = err.response?.data?.message
+        || (validationErrors ? Object.values(validationErrors).flat().join(' ') : null)
+        || 'Gagal memperbarui profil';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, error, register, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, error, register, login, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
