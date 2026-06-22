@@ -1,8 +1,9 @@
 <?php
-// Script untuk membuat symlink storage di InfinityFree (Laravel di dalam htdocs/laravel)
-// Jalankan script ini dengan mengakses: https://toko-pancing.infinityfree.io/laravel/public/symlink.php
+// Script untuk membuat symlink storage di InfinityFree (Laravel di luar htdocs)
+// Jalankan script ini dengan mengakses: https://toko-pancing.infinityfree.io/api/symlink.php
 
-$target = dirname(__DIR__) . '/storage/app/public';
+// Mencari folder laravel yang berada di luar htdocs (sejajar dengan htdocs)
+$target = dirname(dirname(__DIR__)) . '/laravel/storage/app/public';
 $shortcut = __DIR__ . '/storage';
 
 // Hapus shortcut lama jika berupa file/link rusak sebelum membuat baru
@@ -17,5 +18,7 @@ if (symlink($target, $shortcut)) {
 } else {
     echo "<h1>Gagal!</h1>";
     echo "<p>Gagal membuat symlink storage. Pastikan struktur folder Anda sesuai panduan.</p>";
+    echo "<p>Target: $target</p>";
+    echo "<p>Shortcut: $shortcut</p>";
 }
 ?>
