@@ -13,7 +13,7 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Product::query();
+        $query = Product::with(['category', 'images', 'promos']);
 
         // Filter by category
         if ($request->has('category')) {
@@ -80,7 +80,7 @@ class ProductController extends Controller
         }
 
         return response()->json([
-            'product' => $product->load('category')
+            'product' => $product->load(['category', 'images', 'promos'])
         ], 200);
     }
 

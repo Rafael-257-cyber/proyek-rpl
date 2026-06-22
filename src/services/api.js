@@ -22,6 +22,7 @@ api.interceptors.request.use((config) => {
 export const getImageUrl = (imagePath) => {
   if (!imagePath) return '/placeholder.png';
   if (imagePath.startsWith('http')) return imagePath;
+  if (imagePath.startsWith('/assets')) return imagePath;
 
   const baseUrl = API_URL;
   const serverUrl = baseUrl.replace(/\/api$/, '');
@@ -76,6 +77,11 @@ export const ordersAPI = {
 export const ratingsAPI = {
   getProductRatings: (productId) => api.get(`/ratings/product/${productId}`),
   getUserRating: (orderItemId) => api.get(`/ratings/user/${orderItemId}`),
+};
+
+// Promos API
+export const promosAPI = {
+  getActivePromos: () => api.get('/promos'),
 };
 
 // Admin API

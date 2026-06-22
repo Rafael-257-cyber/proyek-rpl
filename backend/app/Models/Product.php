@@ -57,4 +57,13 @@ class Product extends Model
     {
         return $this->hasMany(ProductImage::class);
     }
+
+    /**
+     * Get active promos for this product
+     */
+    public function promos()
+    {
+        return $this->belongsToMany(Promo::class, 'product_promo', 'product_id', 'promo_id')
+            ->where('is_active', true);
+    }
 }

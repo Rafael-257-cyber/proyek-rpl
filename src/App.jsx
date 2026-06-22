@@ -1,9 +1,9 @@
 // src/App.jsx
 import React, { useState, useMemo, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { FiTruck, FiCheckCircle, FiShield, FiMessageCircle } from 'react-icons/fi';
+import { FiTruck, FiCheckCircle, FiShield, FiMessageCircle, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { GiFishingPole, GiFishingHook, GiFishingLure, GiFishingNet } from 'react-icons/gi';
-import { FaSync, FaToolbox } from 'react-icons/fa';
+import { FaSync, FaToolbox, FaPlus } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { useCart } from './context/CartContext';
 import { useAuth } from './context/AuthContext';
@@ -28,8 +28,53 @@ import AdminProducts from './pages/AdminProducts';
 import AdminOrders from './pages/AdminOrders';
 import AdminCategories from './pages/AdminCategories';
 import AdminSalesReport from './pages/AdminSalesReport';
-import { productsAPI } from './services/api';
+import { productsAPI, promosAPI, getImageUrl } from './services/api';
 import { products } from './data/products';
+
+const promoBanners = [
+  {
+    id: 1,
+    image: '/assets/joran-pancing-tua-dan-air-laut-biru_34013-35.avif',
+    title: 'Perlengkapan Mancing Kualitas Terbaik',
+    subtitle: 'Temukan alat pancing terbaik dengan harga bersahabat',
+    buttonText: 'Belanja Sekarang'
+  },
+  {
+    id: 2,
+    image: '/assets/joran-pancing-tua-dan-air-laut-biru_34013-35.avif',
+    title: 'Perlengkapan Mancing Kualitas Terbaik',
+    subtitle: 'Temukan alat pancing terbaik dengan harga bersahabat',
+    buttonText: 'Tambah Sekarang'
+  },
+  {
+    id: 3,
+    image: 'https://images.unsplash.com/photo-1506809598284-934c553a067a?q=80&w=1000&auto=format&fit=crop',
+    title: 'Koleksi Umpan Terbaru',
+    subtitle: 'Tingkatkan hasil tangkapan dengan umpan inovatif kami',
+    buttonText: 'Cek Koleksi'
+  }
+];
+
+const bundleProducts = [
+  {
+    id: 'bundle-1',
+    name: 'Paket Mancing Pemula',
+    description: 'Joran + Reel + Senar (Hemat 100rb)',
+    originalPrice: 450000,
+    price: 350000,
+    image: 'https://images.unsplash.com/photo-1544336025-a136bfb10cc5?q=80&w=500&auto=format&fit=crop',
+    items: ['Joran Shimano 180cm', 'Reel Daido 1000', 'Senar PE 0.8 100m']
+  },
+  {
+    id: 'bundle-2',
+    name: 'Paket Pro Casting',
+    description: 'Baitcasting set lengkap dengan umpan',
+    originalPrice: 850000,
+    price: 699000,
+    image: 'https://images.unsplash.com/photo-1551368321-4b1bd2422c15?q=80&w=500&auto=format&fit=crop',
+    items: ['Joran BC Carbon 190cm', 'Reel BC 7.2:1', 'Minnow Lure 3pcs']
+  }
+];
 
 function HomePage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -44,30 +89,64 @@ function HomePage() {
     max_price: '',
     in_stock: false,
   });
+  const [activeBanner, setActiveBanner] = useState(0);
   const [apiProducts, setApiProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]); // Will populate from API
+  const [promos, setPromos] = useState([]); // Will populate from API
+  const [bundlingProducts, setBundlingProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const { cartItems, addToCart, updateQuantity, removeFromCart, totalPrice, cartCount } = useCart();
 
-  // Fetch initial products from API
+  // Fetch initial data
   useEffect(() => {
-    const fetchInitialProducts = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
+        // Fetch products
         const response = await productsAPI.getAll({});
         const fetchedProducts = response.data.data || [];
         setApiProducts(fetchedProducts);
         setFilteredProducts(fetchedProducts);
+        
+        // Extract bundling products
+        const bundles = fetchedProducts.filter(p => p.category && p.category.name === 'Bundling');
+        setBundlingProducts(bundles);
+
+        // Fetch promos
+        try {
+          const promoRes = await promosAPI.getActivePromos();
+          if (promoRes.data && promoRes.data.data && promoRes.data.data.length > 0) {
+            setPromos(promoRes.data.data);
+          } else {
+            setPromos(promoBanners); // Fallback to mock if empty
+          }
+        } catch (e) {
+          console.error('Failed to fetch promos', e);
+          setPromos(promoBanners); // Fallback
+        }
+        
       } catch (err) {
         console.error('Failed to fetch initial products:', err);
-        // Fallback to local data if backend fails
         setApiProducts(products);
         setFilteredProducts(products);
+        setPromos(promoBanners);
+        setBundlingProducts(bundleProducts);
       } finally {
         setLoading(false);
       }
     };
-    fetchInitialProducts();
+    fetchData();
+  }, []);
+
+  // Auto slide banner
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveBanner((prev) => {
+        const length = promos.length > 0 ? promos.length : promoBanners.length;
+        return (prev + 1) % length;
+      });
+    }, 5000);
+    return () => clearInterval(timer);
   }, []);
 
   const handleFilterChange = async (filters) => {
@@ -153,43 +232,143 @@ function HomePage() {
       <main className="flex-1 w-full">
         <div className="w-full px-4 sm:px-6 lg:px-8 max-w-none">
           <div className="max-w-7xl mx-auto">
-            {/* Hero Banner */}
-          <section className="relative h-64 md:h-72 bg-gradient-to-r from-blue-600 to-blue-800 overflow-hidden rounded-2xl mt-6 mb-8">
-            <div className="absolute inset-0">
-              <img
-                src="/assets/joran-pancing-tua-dan-air-laut-biru_34013-35.avif"
-                alt="Hero"
-                className="w-full h-full object-cover opacity-50"
-              />
-            </div>
-            <div className="absolute inset-0 bg-blue-600/50"></div>
-            <div className="relative h-full px-4 flex items-center">
-              <div className="max-w-2xl">
-                <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                  Perlengkapan Mancing Kualitas Terbaik
-                </h1>
-                <p className="text-lg text-blue-100 mb-6">
-                  Ternakan alat pancing terbaik dengan harga berkebalikan
-                </p>
-                <button
-                  onClick={() => setIsFilterOpen(true)}
-                  className="px-8 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-400 transition-all shadow-lg"
-                >
-                  Belanja Sekarang
-                </button>
+            {/* Hero Banner Carousel */}
+          <section className="relative h-64 md:h-80 bg-gray-900 overflow-hidden rounded-2xl mt-6 mb-8 group">
+            {promos.map((banner, index) => (
+              <div
+                key={banner.id}
+                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                  index === activeBanner ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                }`}
+              >
+                <img
+                  src={banner.image_path ? getImageUrl(banner.image_path) : banner.image}
+                  alt={banner.title}
+                  className="absolute inset-0 w-full h-full object-cover opacity-60"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-900/80 to-transparent"></div>
+                <div className="relative h-full px-8 flex items-center">
+                  <div className="max-w-2xl transform transition-transform duration-700 translate-y-0">
+                    <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 drop-shadow-lg">
+                      {banner.title}
+                    </h1>
+                    <p className="text-lg text-blue-50 mb-6 drop-shadow-md">
+                      {banner.subtitle}
+                    </p>
+                    <button
+                      onClick={() => setIsFilterOpen(true)}
+                      className="px-8 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-400 transition-all shadow-lg hover:scale-105"
+                    >
+                      {banner.button_text || banner.buttonText || 'Belanja Sekarang'}
+                    </button>
+                  </div>
+                </div>
               </div>
+            ))}
+            
+            {/* Banner Controls */}
+            <button
+              onClick={() => setActiveBanner((prev) => (prev === 0 ? promos.length - 1 : prev - 1))}
+              className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white z-20 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+            >
+              <FiChevronLeft size={24} />
+            </button>
+            <button
+              onClick={() => setActiveBanner((prev) => (prev + 1) % promos.length)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white z-20 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+            >
+              <FiChevronRight size={24} />
+            </button>
+
+            {/* Banner Indicators */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+              {promos.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setActiveBanner(index)}
+                  className={`w-2.5 h-2.5 rounded-full transition-all ${
+                    index === activeBanner ? 'bg-white w-8' : 'bg-white/50 hover:bg-white/80'
+                  }`}
+                />
+              ))}
             </div>
           </section>
           {/* Features Section */}
           <section className="py-12 -mt-8 relative z-10">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {features.map((feature, idx) => (
-                <div key={idx} className="bg-white rounded-xl shadow-md p-6 text-center hover:shadow-lg transition-shadow">
+                <div key={idx} className="bg-white rounded-xl shadow-md p-6 text-center hover:shadow-lg transition-shadow border border-gray-100">
                   {feature.icon}
                   <h3 className="font-semibold text-gray-800 mb-1">{feature.title}</h3>
                   <p className="text-sm text-gray-500">{feature.subtitle}</p>
                 </div>
               ))}
+            </div>
+          </section>
+
+          {/* Paket Bundling Section */}
+          <section className="py-12 bg-gradient-to-b from-white to-blue-50 rounded-3xl px-6 my-8 border border-blue-100 shadow-sm">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-2">
+                  <span className="text-orange-500">🔥</span> Paket Bundling Pilihan
+                </h2>
+                <p className="text-gray-500 mt-1">Beli sepaket lebih hemat dan praktis!</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {bundlingProducts.map((bundle) => {
+                const isRealProduct = bundle.id !== 'bundle-1' && bundle.id !== 'bundle-2';
+                // Calculate prices
+                const price = isRealProduct ? parseFloat(bundle.price) : bundle.price;
+                const originalPrice = isRealProduct ? (price * 1.25) : bundle.originalPrice; // Mock original price for real bundles
+                const items = isRealProduct 
+                  ? (bundle.specifications && bundle.specifications.length > 0 ? bundle.specifications : bundle.description.split('+').map(i => i.trim()))
+                  : bundle.items;
+                const imageUrl = isRealProduct ? getImageUrl(bundle.image) : bundle.image;
+
+                return (
+                <div key={bundle.id} className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-shadow flex flex-col sm:flex-row border border-gray-100">
+                  {/* Image */}
+                  <div className="sm:w-2/5 h-48 sm:h-auto relative cursor-pointer" onClick={() => isRealProduct ? window.location.href = `/product/${bundle.id}` : null}>
+                    <img src={imageUrl} alt={bundle.name} className="w-full h-full object-cover" />
+                    <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-md shadow">
+                      HEMAT Rp{(originalPrice - price).toLocaleString('id-ID')}
+                    </div>
+                  </div>
+                  
+                  {/* Content */}
+                  <div className="p-5 flex-1 flex flex-col">
+                    <h3 className="font-bold text-lg text-gray-800 mb-1 cursor-pointer hover:text-blue-600" onClick={() => isRealProduct ? window.location.href = `/product/${bundle.id}` : null}>{bundle.name}</h3>
+                    <p className="text-sm text-blue-600 font-medium mb-3">{isRealProduct ? bundle.brand : bundle.description}</p>
+                    
+                    {/* Items */}
+                    <div className="space-y-1 mb-4 flex-1">
+                      {items.map((item, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                          <FaPlus className="text-green-500 w-3 h-3 flex-shrink-0" />
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Price and Action */}
+                    <div className="mt-auto flex items-end justify-between">
+                      <div>
+                        <p className="text-xs text-gray-400 line-through mb-0.5">Rp{originalPrice.toLocaleString('id-ID')}</p>
+                        <p className="text-xl font-bold text-gray-800">Rp{price.toLocaleString('id-ID')}</p>
+                      </div>
+                      <button 
+                        onClick={() => handleAddToCart({ ...bundle, finalPrice: price })}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                      >
+                        Tambah
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )})}
             </div>
           </section>
 

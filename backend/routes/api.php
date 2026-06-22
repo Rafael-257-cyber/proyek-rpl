@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\Admin\CategoryController;
 use App\Http\Controllers\Api\Admin\ReportExportController;
 use App\Http\Controllers\Api\PaymentCallbackController;
+use App\Http\Controllers\Api\PromoController;
 
 /*
 |--------------------------------------------------------------------------
@@ -44,6 +45,9 @@ Route::prefix('products')->group(function () {
     Route::get('/', [ProductController::class, 'index']);
     Route::get('/{id}', [ProductController::class, 'show']);
 });
+
+// Promos (Public)
+Route::get('/promos', [PromoController::class, 'index']);
 
 // Protected Routes - Require Authentication
 Route::middleware('auth:sanctum')->group(function () {

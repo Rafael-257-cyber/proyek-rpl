@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         // Run seeders
         $this->call([
             CategorySeeder::class,
+            PromoSeeder::class,
         ]);
 
         // Create admin user

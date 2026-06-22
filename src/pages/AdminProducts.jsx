@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import AdminLayout from '../components/AdminLayout';
-import { adminAPI, productsAPI, getImageUrl } from '../services/api';
+import { adminAPI, productsAPI, promosAPI, getImageUrl } from '../services/api';
 
 export default function AdminProducts() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [promos, setPromos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -20,7 +21,8 @@ export default function AdminProducts() {
     stock: '',
     brand: '',
     location: '',
-    specifications: ''
+    specifications: '',
+    promo_id: ''
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -32,6 +34,7 @@ export default function AdminProducts() {
   useEffect(() => {
     fetchCategories();
     fetchProducts();
+    fetchPromos();
   }, []);
 
   const normalizeCategories = (payload) => {
@@ -62,6 +65,15 @@ export default function AdminProducts() {
     }
   };
 
+  const fetchPromos = async () => {
+    try {
+      const res = await promosAPI.getActivePromos();
+      setPromos(res.data?.data || []);
+    } catch (err) {
+      console.error('Failed to fetch promos:', err);
+    }
+  };
+
   const fetchProducts = async () => {
     try {
       setLoading(true);
@@ -85,7 +97,8 @@ export default function AdminProducts() {
       stock: '',
       brand: '',
       location: '',
-      specifications: ''
+      specifications: '',
+      promo_id: ''
     });
     setImageFile(null);
     setImagePreview(null);
@@ -104,7 +117,8 @@ export default function AdminProducts() {
       stock: product.stock,
       brand: product.brand,
       location: product.location,
-      specifications: JSON.stringify(product.specifications || {})
+      specifications: JSON.stringify(product.specifications || {}),
+      promo_id: product.promos && product.promos.length > 0 ? product.promos[0].id : ''
     });
     setImageFile(null);
     setImagePreview(product.image ? getImageUrl(product.image) : null);
@@ -188,6 +202,13 @@ export default function AdminProducts() {
       // Only append location if it has a value
       if (formData.location) {
         payload.append('location', formData.location);
+      }
+
+      // Add promo_id if selected
+      if (formData.promo_id) {
+        payload.append('promo_id', formData.promo_id);
+      } else {
+        payload.append('promo_id', ''); // Explicitly clear it if needed
       }
       
       // Always append specifications as JSON string
@@ -310,9 +331,18 @@ export default function AdminProducts() {
               {paginatedProducts.length > 0 ? (
                 paginatedProducts.map((product) => (
                   <tr key={product.id} className="border-b hover:bg-gray-50">
-                    <td className="px-6 py-3 text-gray-700 font-medium">{product.name}</td>
+                    <td className="px-6 py-3 text-gray-700 font-medium">
+                      {product.name}
+                      {product.promos && product.promos.length > 0 && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                          Promo {parseFloat(product.promos[0].discount_percentage)}%
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-3 text-gray-600">{product.brand}</td>
-                    <td className="px-6 py-3 text-gray-700 font-semibold">Rp{product.price?.toLocaleString('id-ID') || 0}</td>
+                    <td className="px-6 py-3 text-gray-700 font-semibold">
+                      Rp{product.price?.toLocaleString('id-ID') || 0}
+                    </td>
                     <td className="px-6 py-3">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                         product.stock > 20 ? 'bg-green-100 text-green-700' :
@@ -542,6 +572,18 @@ export default function AdminProducts() {
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>
                         {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={formData.promo_id}
+                    onChange={(e) => setFormData({...formData, promo_id: e.target.value})}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Tanpa Promo</option>
+                    {promos.map(promo => (
+                      <option key={promo.id} value={promo.id}>
+                        {promo.title} ({parseFloat(promo.discount_percentage)}%)
                       </option>
                     ))}
                   </select>

@@ -30,7 +30,7 @@ class ProductController extends Controller
             $query->where('category_id', $category);
         }
 
-        $products = $query->with(['category', 'images'])
+        $products = $query->with(['category', 'images', 'promos'])
             ->paginate($perPage);
 
         return response()->json([
@@ -61,6 +61,7 @@ class ProductController extends Controller
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'additional_images' => 'nullable|array',
             'additional_images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+            'promo_id' => 'nullable|integer|exists:promos,id',
         ]);
 
         if ($validator->fails()) {
@@ -68,7 +69,7 @@ class ProductController extends Controller
         }
 
         // Prepare data
-        $data = $request->except('image');
+        $data = $request->except(['image', 'promo_id']);
         
         // Parse specifications from JSON string to array
         if (isset($data['specifications']) && is_string($data['specifications'])) {
@@ -99,6 +100,13 @@ class ProductController extends Controller
 
         $product = Product::create($data);
 
+        // Sync Promo
+        if ($request->has('promo_id') && $request->promo_id) {
+            $product->promos()->sync([$request->promo_id]);
+        } else {
+            $product->promos()->detach();
+        }
+
         // Handle additional images
         if ($request->hasFile('additional_images')) {
             foreach ($request->file('additional_images') as $file) {
@@ -126,7 +134,7 @@ class ProductController extends Controller
      */
     public function show($id)
     {
-        $product = Product::with(['category', 'images'])->find($id);
+        $product = Product::with(['category', 'images', 'promos'])->find($id);
 
         if (!$product) {
             return response()->json(['message' => 'Product not found'], 404);
@@ -158,6 +166,7 @@ class ProductController extends Controller
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'additional_images' => 'nullable|array',
             'additional_images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+            'promo_id' => 'nullable|integer|exists:promos,id',
         ]);
 
         if ($validator->fails()) {
@@ -165,7 +174,7 @@ class ProductController extends Controller
         }
 
         // Prepare data
-        $data = $request->except('image');
+        $data = $request->except(['image', 'promo_id']);
         
         // Parse specifications from JSON string to array
         if (isset($data['specifications']) && is_string($data['specifications'])) {
@@ -195,6 +204,13 @@ class ProductController extends Controller
         }
 
         $product->update($data);
+
+        // Sync Promo
+        if ($request->has('promo_id') && $request->promo_id) {
+            $product->promos()->sync([$request->promo_id]);
+        } else {
+            $product->promos()->detach();
+        }
 
         // Handle additional images
         if ($request->hasFile('additional_images')) {

@@ -86,14 +86,24 @@ export default function ProductDetailPage() {
     brand: product.brand || '-',
     category: typeof product.category === 'object' ? product.category?.name : (product.category || '-'),
     location: product.location || '-',
-    discount: 0,
-    originalPrice: product.price,
+    originalPrice: parseFloat(product.price) || 0,
   };
 
-  const finalPrice = product.price;
+  // Promo Logic
+  let finalPrice = productDetails.originalPrice;
+  let activePromo = null;
+
+  if (product.promos && product.promos.length > 0) {
+    activePromo = product.promos[0];
+    const discountAmount = (productDetails.originalPrice * activePromo.discount_percentage) / 100;
+    finalPrice = productDetails.originalPrice - discountAmount;
+  }
+
+  // Set the product price in object to match what Add to Cart expects
+  const productToAdd = { ...product, finalPrice };
 
   const handleAddToCart = () => {
-    addToCart(product, quantity);
+    addToCart(productToAdd, quantity);
     toast.success(`${quantity} ${product.name} ditambahkan ke keranjang!`, {
       icon: '🛒',
       style: {
@@ -105,7 +115,7 @@ export default function ProductDetailPage() {
   };
 
   const handleBuyNow = () => {
-    addToCart(product, quantity);
+    addToCart(productToAdd, quantity);
     navigate('/checkout');
   };
 
@@ -211,13 +221,13 @@ export default function ProductDetailPage() {
                   <span className="text-4xl font-bold text-gray-800">
                     Rp{finalPrice.toLocaleString('id-ID')}
                   </span>
-                  {productDetails.discount > 0 && (
+                  {activePromo && (
                     <>
                       <span className="text-lg text-gray-500 line-through">
                         Rp{productDetails.originalPrice.toLocaleString('id-ID')}
                       </span>
                       <span className="bg-red-100 text-red-600 text-sm font-bold px-2 py-1 rounded">
-                        -{productDetails.discount}%
+                        -{parseFloat(activePromo.discount_percentage)}%
                       </span>
                     </>
                   )}
