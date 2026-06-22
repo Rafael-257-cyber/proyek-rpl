@@ -65,7 +65,11 @@ export const ordersAPI = {
     });
   },
   cancelOrder: (id) => api.post(`/orders/${id}/cancel`),
-  submitRating: (data) => api.post('/ratings', data),
+  submitRating: (data) => {
+    return api.post('/ratings', data);
+  },
+  updatePaymentMethod: (id, payment_method) => api.put(`/orders/${id}/payment-method`, { payment_method }),
+  syncMidtrans: (id, payload) => api.post(`/orders/${id}/sync`, payload),
 };
 
 // Rating API
@@ -90,6 +94,7 @@ export const adminAPI = {
   createProduct: (data) => api.post('/admin/products', data),
   updateProduct: (id, data) => api.put(`/admin/products/${id}`, data),
   deleteProduct: (id) => api.delete(`/admin/products/${id}`),
+  deleteProductImage: (productId, imageId) => api.delete(`/admin/products/${productId}/images/${imageId}`),
   updateStock: (data) => api.post('/admin/products/update-stock', data),
 
   // Categories Management

@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { FiTruck, FiCheckCircle, FiShield, FiMessageCircle } from 'react-icons/fi';
 import { GiFishingPole, GiFishingHook, GiFishingLure, GiFishingNet } from 'react-icons/gi';
 import { FaSync, FaToolbox } from 'react-icons/fa';
+import toast from 'react-hot-toast';
 import { useCart } from './context/CartContext';
 import { useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
@@ -104,6 +105,14 @@ function HomePage() {
 
   const handleAddToCart = (product) => {
     addToCart(product);
+    toast.success(`${product.name} ditambahkan ke keranjang!`, {
+      icon: '🛒',
+      style: {
+        borderRadius: '10px',
+        background: '#333',
+        color: '#fff',
+      },
+    });
   };
 
   const categories = [
@@ -278,13 +287,23 @@ function HomePage() {
 
 // Protected Route Component
 function ProtectedRoute({ children }) {
-  const { token } = useAuth();
+  const { token, isInitializing } = useAuth();
+  
+  if (isInitializing) {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-100">Memuat...</div>;
+  }
+  
   return token ? children : <Navigate to="/login" />;
 }
 
 // Protected Admin Route Component
 function ProtectedAdminRoute({ children }) {
-  const { token, user } = useAuth();
+  const { token, user, isInitializing } = useAuth();
+  
+  if (isInitializing) {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-100">Memuat...</div>;
+  }
+  
   if (!token) return <Navigate to="/login" />;
   if (user?.role !== 'admin') return <Navigate to="/" />;
   return children;

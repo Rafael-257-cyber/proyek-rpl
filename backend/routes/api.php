@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\Admin\CategoryController;
 use App\Http\Controllers\Api\Admin\ReportExportController;
+use App\Http\Controllers\Api\PaymentCallbackController;
 
 /*
 |--------------------------------------------------------------------------
@@ -28,6 +29,9 @@ Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
 });
+
+// Midtrans Webhook
+Route::post('/midtrans/callback', [PaymentCallbackController::class, 'handle']);
 
 // Product Routes (Public - No Auth)
 Route::prefix('products')->group(function () {
@@ -55,7 +59,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/checkout', [OrderController::class, 'checkout']);
         Route::get('/', [OrderController::class, 'userOrders']);
         Route::get('/{id}', [OrderController::class, 'show']);
+        Route::put('/{id}/payment-method', [OrderController::class, 'updatePaymentMethod']);
         Route::post('/{id}/payment-proof', [OrderController::class, 'uploadPaymentProof']);
+        Route::post('/{id}/sync', [OrderController::class, 'syncMidtrans']);
         Route::post('/{id}/cancel', [OrderController::class, 'cancel']);
     });
 
@@ -89,6 +95,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/{id}', [AdminProductController::class, 'show']);
             Route::put('/{id}', [AdminProductController::class, 'update']);
             Route::delete('/{id}', [AdminProductController::class, 'destroy']);
+            Route::delete('/{id}/images/{imageId}', [AdminProductController::class, 'destroyImage']);
             Route::post('/update-stock', [AdminProductController::class, 'updateStock']);
         });
 

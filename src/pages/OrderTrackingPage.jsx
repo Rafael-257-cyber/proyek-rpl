@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { FiChevronRight, FiCheck, FiTruck, FiPackage, FiClock, FiUpload } from 'react-icons/fi';
+import { FiChevronRight, FiCheck, FiTruck, FiPackage, FiClock, FiUpload, FiX } from 'react-icons/fi';
 import { FaEdit } from 'react-icons/fa';
 import { ordersAPI, getImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -22,6 +22,8 @@ export default function OrderTrackingPage() {
   const [proofUploaded, setProofUploaded] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [isChangingPayment, setIsChangingPayment] = useState(false);
+  const [newPaymentMethod, setNewPaymentMethod] = useState('');
   const pollingTimerRef = useRef(null);
 
   // Scroll to top on mount
@@ -62,7 +64,31 @@ export default function OrderTrackingPage() {
       return;
     }
 
-    loadOrder();
+    const checkUrlParamsAndLoad = async () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const transactionId = searchParams.get('transaction_id');
+      const midtransOrderId = searchParams.get('order_id');
+      const transactionStatus = searchParams.get('transaction_status');
+
+      if ((transactionId || midtransOrderId) && (transactionStatus === 'settlement' || transactionStatus === 'capture')) {
+        try {
+          // Pass all data so backend can use local fallback if needed
+          await ordersAPI.syncMidtrans(orderId, {
+             transaction_id: transactionId,
+             order_id: midtransOrderId,
+             transaction_status: transactionStatus
+          });
+          // Remove query params from URL so it doesn't run again on reload
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (err) {
+          console.error('Failed to sync midtrans status from URL', err);
+        }
+      }
+      loadOrder();
+    };
+
+    checkUrlParamsAndLoad();
+
     pollingTimerRef.current = setInterval(() => {
       loadOrder({ silent: true });
     }, 15000);
@@ -186,6 +212,22 @@ export default function OrderTrackingPage() {
     }
   };
 
+  const handleUpdatePaymentMethod = async () => {
+    if (!newPaymentMethod) return;
+    try {
+      setLoading(true);
+      await ordersAPI.updatePaymentMethod(order.id, newPaymentMethod);
+      setIsChangingPayment(false);
+      setNewPaymentMethod('');
+      setSuccessMessage('Metode pembayaran berhasil diubah');
+      await loadOrder({ silent: true });
+    } catch (err) {
+      setPageError(err.response?.data?.message || 'Gagal mengubah metode pembayaran');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
@@ -248,13 +290,6 @@ export default function OrderTrackingPage() {
                   </div>
                 </div>
 
-                {refreshing && (
-                  <div className="mb-4 flex items-center gap-2 text-xs text-gray-500">
-                    <FiClock className="w-4 h-4" />
-                    Memeriksa pembaruan status...
-                  </div>
-                )}
-
                 {/* Products */}
                 <div className="mb-6 pb-6 border-b border-gray-200">
                   <div className="flex items-center gap-3 mb-4">
@@ -294,7 +329,20 @@ export default function OrderTrackingPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 mb-6">
                   <div>
                     <p className="text-gray-500">Metode Pembayaran</p>
-                    <p className="font-medium text-gray-800">{order.payment_method || '-'}</p>
+                    <div className="font-medium text-gray-800 flex items-center gap-2">
+                      {order.payment_method || '-'}
+                      {order.status === 'pending_payment' && (
+                        <button
+                          onClick={() => {
+                            setNewPaymentMethod(order.payment_method || '');
+                            setIsChangingPayment(true);
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-semibold bg-blue-50 px-2 py-0.5 rounded"
+                        >
+                          <FaEdit size={12} /> Ganti
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <p className="text-gray-500">Batas Pembayaran</p>
@@ -317,7 +365,45 @@ export default function OrderTrackingPage() {
                   )}
                 </div>
 
-                {canUploadProof && order.payment_method !== 'cod' && (
+                {order.status === 'pending_payment' && order.snap_token && order.payment_method !== 'cod' && (
+                  <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold text-blue-900 mb-1">Selesaikan Pembayaran</h3>
+                      <p className="text-sm text-blue-800">
+                        Klik tombol di samping untuk memilih metode pembayaran melalui Midtrans.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.snap) {
+                          window.snap.pay(order.snap_token, {
+                            onSuccess: async (result) => {
+                              try {
+                                await ordersAPI.syncMidtrans(order.id, {
+                                   transaction_id: result.transaction_id,
+                                   order_id: result.order_id,
+                                   transaction_status: result.transaction_status
+                                });
+                              } catch (err) {
+                                console.error('Failed to sync midtrans status', err);
+                              }
+                              loadOrder();
+                            },
+                            onPending: () => loadOrder(),
+                            onError: () => loadOrder(),
+                            onClose: () => loadOrder()
+                          });
+                        }
+                      }}
+                      className="whitespace-nowrap inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-700 transition-colors shadow-sm"
+                    >
+                      Bayar Sekarang
+                    </button>
+                  </div>
+                )}
+
+                {canUploadProof && order.payment_method !== 'cod' && !order.snap_token && (
                   <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
                     <h3 className="font-semibold text-blue-900 mb-2">Unggah Bukti Pembayaran</h3>
                     <p className="text-sm text-blue-800 mb-3">
@@ -511,11 +597,17 @@ export default function OrderTrackingPage() {
 
       {successMessage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl relative">
+            <button 
+              onClick={() => setSuccessMessage('')}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <FiX className="w-6 h-6" />
+            </button>
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
               <FiCheck className="h-6 w-6" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900">Bukti pembayaran terkirim</h3>
+            <h3 className="text-xl font-bold text-gray-900">Sukses</h3>
             <p className="mt-2 text-sm text-gray-600">{successMessage}</p>
             <button
               type="button"
@@ -524,6 +616,57 @@ export default function OrderTrackingPage() {
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {isChangingPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl relative">
+            <button 
+              onClick={() => setIsChangingPayment(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <FiX className="w-6 h-6" />
+            </button>
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Ganti Metode Pembayaran</h3>
+            <div className="space-y-3 mb-6">
+              {[
+                { value: 'transfer', label: 'Transfer Bank Manual' },
+                { value: 'qris', label: 'QRIS' },
+                { value: 'ewallet', label: 'E-Wallet (GoPay, OVO)' },
+                { value: 'cod', label: 'COD (Bayar di Tempat)' }
+              ].map(method => (
+                <label key={method.value} className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${newPaymentMethod === method.value ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'}`}>
+                  <input
+                    type="radio"
+                    name="payment_method"
+                    value={method.value}
+                    checked={newPaymentMethod === method.value}
+                    onChange={(e) => setNewPaymentMethod(e.target.value)}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-800">{method.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsChangingPayment(false)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdatePaymentMethod}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                disabled={!newPaymentMethod || newPaymentMethod === order.payment_method}
+              >
+                Simpan
+              </button>
+            </div>
           </div>
         </div>
       )}

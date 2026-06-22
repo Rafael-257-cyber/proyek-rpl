@@ -151,9 +151,9 @@ export default function MyOrdersPage() {
                   <Link
                     key={order.id}
                     to={`/orders/${order.id}`}
-                    className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow p-6 border border-gray-200 hover:border-blue-300"
+                    className="block bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow p-6 border border-gray-200 hover:border-blue-300"
                   >
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-center">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
                       {/* Order ID and Date */}
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Nomor Pesanan</p>
@@ -190,14 +190,6 @@ export default function MyOrdersPage() {
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
                           {getStatusLabel(order.status)}
                         </span>
-                      </div>
-
-                      {/* Action */}
-                      <div className="flex justify-end">
-                        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm flex items-center gap-2">
-                          Lihat Detail
-                          <FiChevronRight size={18} />
-                        </button>
                       </div>
                     </div>
                   </Link>

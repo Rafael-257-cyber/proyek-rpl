@@ -5,6 +5,7 @@ import { products } from '../data/products';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { getImageUrl, productsAPI } from '../services/api';
+import toast from 'react-hot-toast';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
@@ -71,13 +72,11 @@ export default function ProductDetailPage() {
     );
   }
 
-  // Mock data untuk images galeri
+  // Menggabungkan foto utama dengan foto-foto tambahan dari galeri
   const productImages = [
     product.image,
-    product.image,
-    product.image,
-    product.image,
-  ]; // Dibuat 4 karena UI nya butuh 4 gambar thumbnail
+    ...(product.images ? product.images.map(img => img.image_path) : [])
+  ].filter(Boolean);
 
   // Use actual product details or fallback to mock
   const productDetails = {
@@ -95,8 +94,14 @@ export default function ProductDetailPage() {
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
-    // Optional: show toast notification
-    alert(`${quantity} item(s) ditambahkan ke keranjang!`);
+    toast.success(`${quantity} ${product.name} ditambahkan ke keranjang!`, {
+      icon: '🛒',
+      style: {
+        borderRadius: '10px',
+        background: '#333',
+        color: '#fff',
+      },
+    });
   };
 
   const handleBuyNow = () => {
@@ -155,25 +160,27 @@ export default function ProductDetailPage() {
               </div>
 
               {/* Thumbnail Gallery */}
-              <div className="grid grid-cols-4 gap-3">
-                {productImages.map((img, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedImage(idx)}
-                    className={`aspect-square rounded-lg border-2 overflow-hidden transition-all ${
-                      selectedImage === idx
-                        ? 'border-blue-500 shadow-lg'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    <img
-                      src={getImageUrl(img)}
-                      alt={`Preview ${idx + 1}`}
-                      className="w-full h-full object-contain p-2"
-                    />
-                  </button>
-                ))}
-              </div>
+              {productImages.length > 1 && (
+                <div className="grid grid-cols-4 gap-3 mt-4">
+                  {productImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedImage(idx)}
+                      className={`aspect-square rounded-lg border-2 overflow-hidden transition-all ${
+                        selectedImage === idx
+                          ? 'border-blue-500 shadow-lg'
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <img
+                        src={getImageUrl(img)}
+                        alt={`Preview ${idx + 1}`}
+                        className="w-full h-full object-cover p-1"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Right: Product Details */}
@@ -284,14 +291,16 @@ export default function ProductDetailPage() {
               <div className="flex gap-4">
                 <button
                   onClick={handleAddToCart}
-                  className="flex-1 px-6 py-3 border-2 border-blue-500 text-blue-600 font-semibold rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+                  disabled={product.stock <= 0}
+                  className="flex-1 px-6 py-3 border-2 border-blue-500 text-blue-600 font-semibold rounded-lg hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <FiShoppingCart size={20} />
                   Tambah ke Keranjang
                 </button>
                 <button
                   onClick={handleBuyNow}
-                  className="flex-1 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                  disabled={product.stock <= 0}
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
                 >
                   Beli Sekarang
                 </button>

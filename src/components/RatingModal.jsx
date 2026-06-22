@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FaStar, FaTimes } from 'react-icons/fa';
+import React, { useState, useRef } from 'react';
+import { FaStar, FaTimes, FaImage, FaTrash } from 'react-icons/fa';
 import { ordersAPI, getImageUrl } from '../services/api';
 
 export default function RatingModal({ isOpen, onClose, orderItem, onSuccess }) {
@@ -8,6 +8,30 @@ export default function RatingModal({ isOpen, onClose, orderItem, onSuccess }) {
   const [review, setReview] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setError('Ukuran gambar maksimal 2MB');
+        return;
+      }
+      setImage(file);
+      setImagePreview(URL.createObjectURL(file));
+      setError(null);
+    }
+  };
+
+  const removeImage = () => {
+    setImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,20 +45,30 @@ export default function RatingModal({ isOpen, onClose, orderItem, onSuccess }) {
       setLoading(true);
       setError(null);
 
-      const response = await ordersAPI.submitRating({
-        order_item_id: orderItem.id,
-        rating,
-        review,
-      });
+      const formData = new FormData();
+      formData.append('order_item_id', orderItem.id);
+      formData.append('rating', rating);
+      if (review) formData.append('review', review);
+      if (image) formData.append('image', image);
+
+      const response = await ordersAPI.submitRating(formData);
 
       if (response.data.message.includes('berhasil')) {
         setRating(0);
         setReview('');
+        setImage(null);
+        setImagePreview(null);
         onSuccess();
         onClose();
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal menyimpan rating');
+      const errorData = err.response?.data;
+      if (errorData?.errors) {
+        const firstError = Object.values(errorData.errors)[0][0];
+        setError(firstError);
+      } else {
+        setError(errorData?.message || 'Gagal menyimpan rating');
+      }
     } finally {
       setLoading(false);
     }
@@ -43,11 +77,11 @@ export default function RatingModal({ isOpen, onClose, orderItem, onSuccess }) {
   if (!isOpen || !orderItem) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Beri Rating Produk</h2>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
+          <h2 className="text-lg font-bold text-gray-900">Beri Rating Produk</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -57,7 +91,7 @@ export default function RatingModal({ isOpen, onClose, orderItem, onSuccess }) {
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto">
           {/* Product Info */}
           <div className="flex gap-4">
             <img
@@ -132,6 +166,45 @@ export default function RatingModal({ isOpen, onClose, orderItem, onSuccess }) {
             </p>
           </div>
 
+          {/* Image Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Foto Produk (Opsional)
+            </label>
+            {!imagePreview ? (
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full px-4 py-8 border-2 border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:bg-gray-50 transition-colors flex flex-col items-center justify-center"
+              >
+                <FaImage className="text-gray-400 text-3xl mb-2" />
+                <p className="text-sm text-gray-500 font-medium">Klik untuk unggah foto</p>
+                <p className="text-xs text-gray-400 mt-1">Maks. 2MB (JPG, PNG, GIF)</p>
+              </div>
+            ) : (
+              <div className="relative inline-block border rounded-lg p-1 bg-gray-50">
+                <img 
+                  src={imagePreview} 
+                  alt="Preview" 
+                  className="h-24 object-contain rounded"
+                />
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow hover:bg-red-600 transition-colors"
+                >
+                  <FaTrash size={12} />
+                </button>
+              </div>
+            )}
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              onChange={handleImageChange}
+              accept="image/jpeg, image/png, image/jpg, image/gif"
+              className="hidden"
+            />
+          </div>
+
           {/* Error Message */}
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
@@ -140,7 +213,7 @@ export default function RatingModal({ isOpen, onClose, orderItem, onSuccess }) {
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-2 shrink-0">
             <button
               type="button"
               onClick={onClose}

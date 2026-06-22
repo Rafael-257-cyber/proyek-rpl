@@ -64,7 +64,8 @@ const ProductCard = ({ product, onAddToCart }) => {
           <span className="text-xl font-bold text-blue-600">{formatPrice(product.price)}</span>
           <button
             onClick={() => onAddToCart(product)}
-            className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition-colors shadow-md"
+            disabled={product.stock <= 0}
+            className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
             aria-label="Add to cart"
           >
             <FiShoppingCart className="text-lg" />

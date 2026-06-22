@@ -16,18 +16,16 @@ class DashboardController extends Controller
      */
     public function getStats(Request $request)
     {
-        // Get date range from query (default: today)
-        $startDate = $request->query('start_date', Carbon::today());
-        $endDate = $request->query('end_date', Carbon::today()->endOfDay());
+        // Get date range from query for specific features if needed later
+        // $startDate = $request->query('start_date', Carbon::today());
+        // $endDate = $request->query('end_date', Carbon::today()->endOfDay());
 
-        // Total Sales
-        $totalSales = Order::whereBetween('created_at', [$startDate, $endDate])
-            ->where('status', '!=', 'cancelled')
+        // Total Sales (All time, completed/paid)
+        $totalSales = Order::where('status', '!=', 'cancelled')
             ->sum('total_price');
 
-        // Total Orders
-        $totalOrders = Order::whereBetween('created_at', [$startDate, $endDate])
-            ->where('status', '!=', 'cancelled')
+        // Total Orders (All time)
+        $totalOrders = Order::where('status', '!=', 'cancelled')
             ->count();
 
         // Pending Payment Orders
@@ -36,12 +34,14 @@ class DashboardController extends Controller
         // Total Products
         $totalProducts = Product::count();
 
+        // Total Users (Only customers)
+        $totalUsers = User::where('role', 'user')->count();
+
         // Low Stock Products (< 5)
         $lowStockProducts = Product::where('stock', '<', 5)->count();
 
-        // Revenue by Status
-        $revenueByStatus = Order::whereBetween('created_at', [$startDate, $endDate])
-            ->where('status', '!=', 'cancelled')
+        // Revenue by Status (All time)
+        $revenueByStatus = Order::where('status', '!=', 'cancelled')
             ->groupBy('status')
             ->selectRaw('status, SUM(total_price) as total')
             ->get();
@@ -54,7 +54,7 @@ class DashboardController extends Controller
             ->map(function ($order) {
                 return [
                     'id' => $order->id,
-                    'user_name' => $order->user->name,
+                    'user_name' => $order->user->name ?? $order->user_name ?? 'Guest',
                     'total_price' => $order->total_price,
                     'status' => $order->status,
                     'created_at' => $order->created_at,
@@ -69,6 +69,7 @@ class DashboardController extends Controller
                 'pending_payment' => $pendingPayment,
                 'total_products' => $totalProducts,
                 'low_stock_products' => $lowStockProducts,
+                'total_users' => $totalUsers,
             ],
             'revenue_by_status' => $revenueByStatus,
             'recent_orders' => $recentOrders,

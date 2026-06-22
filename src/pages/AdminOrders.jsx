@@ -293,7 +293,7 @@ export default function AdminOrders() {
                   </div>
                 </div>
 
-                {selectedOrder.bukti_bayar ? (
+                {selectedOrder.bukti_bayar && (
                   <div className="border-t pt-4 space-y-3">
                     <p className="font-semibold text-gray-800">Bukti Pembayaran</p>
                     <a
@@ -312,10 +312,6 @@ export default function AdminOrders() {
                       Diunggah oleh: {selectedOrder.payment_proof_uploaded_by || 'user'}
                       {selectedOrder.payment_proof_uploaded_at ? ` · ${new Date(selectedOrder.payment_proof_uploaded_at).toLocaleString('id-ID')}` : ''}
                     </p>
-                  </div>
-                ) : (
-                  <div className="border-t pt-4">
-                    <p className="text-sm text-gray-500">Belum ada bukti pembayaran yang diunggah.</p>
                   </div>
                 )}
 

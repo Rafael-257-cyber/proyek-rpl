@@ -66,9 +66,9 @@ const COURIERS = [
   {
     id: 'anteraja',
     courier: 'AnterAja',
-    service: 'Reguler',
+    service: 'Reguler (Promo Gratis Ongkir)',
     estimate: '2–4 hari kerja',
-    cost: 14000,
+    cost: 0,
     logo: '🛵',
     color: '#f59e0b',
   },
@@ -96,7 +96,6 @@ export default function CheckoutPage() {
     shipping_city: '',
     shipping_phone: '',
     shipping_name: '',
-    payment_method: 'transfer',
   });
 
   const [selectedCourier, setSelectedCourier] = useState(null);
@@ -129,13 +128,6 @@ export default function CheckoutPage() {
     setFormData(prev => ({
       ...prev,
       [name]: value
-    }));
-  };
-
-  const handlePaymentMethodChange = (method) => {
-    setFormData(prev => ({
-      ...prev,
-      payment_method: method
     }));
   };
 
@@ -177,11 +169,6 @@ export default function CheckoutPage() {
       window.scrollTo(0, 0);
       return;
     }
-    if (!formData.payment_method) {
-      setError('Pilih metode pembayaran');
-      window.scrollTo(0, 0);
-      return;
-    }
 
     setLoading(true);
     setError('');
@@ -192,7 +179,7 @@ export default function CheckoutPage() {
         shipping_city: formData.shipping_city,
         shipping_phone: formData.shipping_phone,
         shipping_name: formData.shipping_name,
-        payment_method: formData.payment_method,
+        payment_method: 'transfer', // default to midtrans payment
         shipping_cost: shippingCost,
         shipping_courier: selectedCourier.courier,
         shipping_service: selectedCourier.service,
@@ -207,7 +194,11 @@ export default function CheckoutPage() {
       const response = await ordersAPI.checkout(orderData);
 
       clearCart();
-      const orderId = response.data.order?.id || response.data.order_id;
+      const order = response.data.order;
+      const orderId = order?.id || response.data.order_id;
+      const snapToken = order?.snap_token;
+
+      // Just navigate to order tracking page. Snap popup will be opened there.
       navigate(`/orders/${orderId}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Gagal memproses pesanan');
@@ -418,43 +409,7 @@ export default function CheckoutPage() {
                   )}
                 </div>
 
-                {/* ── Metode Pembayaran ─────────────────── */}
-                <div className="bg-white rounded-xl shadow-sm p-6">
-                  <h2 className="text-xl font-bold text-gray-800 mb-6">Metode Pembayaran</h2>
 
-                  <div className="space-y-3">
-                    {[
-                      { value: 'transfer', label: 'Transfer Bank', icon: '🏦', desc: 'BCA, BRI, BNI, Mandiri' },
-                      { value: 'ewallet', label: 'E-Wallet', icon: '📱', desc: 'OVO, DANA, GoPay' },
-                      { value: 'cod', label: 'COD (Bayar di Tempat)', icon: '💵', desc: 'Bayar saat barang tiba' },
-                    ].map(({ value, label, icon, desc }) => (
-                      <div
-                        key={value}
-                        className="flex items-center gap-4 p-4 border-2 rounded-xl cursor-pointer transition-all duration-200"
-                        style={{
-                          borderColor: formData.payment_method === value ? '#2563eb' : '#e5e7eb',
-                          backgroundColor: formData.payment_method === value ? '#eff6ff' : 'white',
-                        }}
-                        onClick={() => handlePaymentMethodChange(value)}
-                      >
-                        <div
-                          className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
-                          style={{
-                            borderColor: formData.payment_method === value ? '#2563eb' : '#d1d5db',
-                            backgroundColor: formData.payment_method === value ? '#2563eb' : 'white',
-                          }}
-                        >
-                          {formData.payment_method === value && <div className="w-2 h-2 rounded-full bg-white" />}
-                        </div>
-                        <span className="text-2xl">{icon}</span>
-                        <div>
-                          <p className="font-semibold text-gray-800">{label}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
               </div>
 

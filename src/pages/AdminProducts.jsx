@@ -24,6 +24,8 @@ export default function AdminProducts() {
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [additionalImages, setAdditionalImages] = useState([]);
+  const [existingAdditionalImages, setExistingAdditionalImages] = useState([]);
 
   const itemsPerPage = 10;
 
@@ -87,6 +89,8 @@ export default function AdminProducts() {
     });
     setImageFile(null);
     setImagePreview(null);
+    setAdditionalImages([]);
+    setExistingAdditionalImages([]);
     setShowForm(true);
   };
 
@@ -96,7 +100,7 @@ export default function AdminProducts() {
       name: product.name,
       description: product.description,
       category_id: product.category_id,
-      price: product.price,
+      price: product.price ? new Intl.NumberFormat('id-ID').format(product.price) : '',
       stock: product.stock,
       brand: product.brand,
       location: product.location,
@@ -104,6 +108,8 @@ export default function AdminProducts() {
     });
     setImageFile(null);
     setImagePreview(product.image ? getImageUrl(product.image) : null);
+    setAdditionalImages([]);
+    setExistingAdditionalImages(product.images || []);
     setShowForm(true);
   };
 
@@ -131,6 +137,26 @@ export default function AdminProducts() {
     }
   };
 
+  const handleAdditionalImagesChange = (e) => {
+    const files = Array.from(e.target.files);
+    setAdditionalImages(prev => [...prev, ...files]);
+  };
+
+  const removeAdditionalImage = (index) => {
+    setAdditionalImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const deleteExistingImage = async (imageId) => {
+    if (confirm('Hapus foto ini?')) {
+      try {
+        await adminAPI.deleteProductImage(editingId, imageId);
+        setExistingAdditionalImages(prev => prev.filter(img => img.id !== imageId));
+      } catch (err) {
+        alert(err.response?.data?.message || 'Gagal menghapus foto');
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -152,7 +178,10 @@ export default function AdminProducts() {
       payload.append('name', formData.name);
       payload.append('description', formData.description);
       payload.append('category_id', categoryId.toString()); // Send as string that can be converted to int
-      payload.append('price', parseFloat(formData.price).toString());
+      
+      const rawPrice = formData.price.toString().replace(/\D/g, '');
+      payload.append('price', rawPrice ? parseFloat(rawPrice).toString() : '0');
+      
       payload.append('stock', parseInt(formData.stock).toString());
       payload.append('brand', formData.brand || '');
       
@@ -179,6 +208,11 @@ export default function AdminProducts() {
       if (imageFile) {
         payload.append('image', imageFile);
       }
+
+      // Add additional images
+      additionalImages.forEach((file) => {
+        payload.append('additional_images[]', file);
+      });
 
       if (editingId) {
         await adminAPI.updateProduct(editingId, payload);
@@ -350,7 +384,7 @@ export default function AdminProducts() {
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                   <div className="flex flex-col items-center">
                     {imagePreview ? (
-                      <div className="relative">
+                      <div className="relative mb-4">
                         <img 
                           src={imagePreview} 
                           alt="Preview" 
@@ -387,7 +421,66 @@ export default function AdminProducts() {
                       htmlFor="imageInput"
                       className="cursor-pointer px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                     >
-                      Pilih Foto
+                      Pilih Foto Utama
+                    </label>
+                  </div>
+                </div>
+
+                {/* Additional Images Section */}
+                <div className="border border-gray-200 rounded-lg p-4 mt-4">
+                  <h4 className="font-semibold text-gray-700 mb-3 text-sm">Galeri Tambahan (Opsional)</h4>
+                  <div className="flex flex-wrap gap-4 mb-4">
+                    {/* Existing Images */}
+                    {existingAdditionalImages.map((img) => (
+                      <div key={img.id} className="relative w-24 h-24">
+                        <img 
+                          src={getImageUrl(img.image_path)} 
+                          alt="Gallery" 
+                          className="w-full h-full object-cover rounded-lg border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => deleteExistingImage(img.id)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 shadow"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    
+                    {/* New Images Preview */}
+                    {additionalImages.map((file, idx) => (
+                      <div key={`new-${idx}`} className="relative w-24 h-24">
+                        <img 
+                          src={URL.createObjectURL(file)} 
+                          alt={`New ${idx}`} 
+                          className="w-full h-full object-cover rounded-lg border opacity-80"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeAdditionalImage(idx)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 shadow"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="text-center">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleAdditionalImagesChange}
+                      className="hidden"
+                      id="additionalImagesInput"
+                    />
+                    <label
+                      htmlFor="additionalImagesInput"
+                      className="cursor-pointer px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors inline-block text-sm border"
+                    >
+                      + Tambah Foto Lainnya
                     </label>
                   </div>
                 </div>
@@ -410,10 +503,14 @@ export default function AdminProducts() {
                     required
                   />
                   <input
-                    type="number"
+                    type="text"
                     placeholder="Harga"
                     value={formData.price}
-                    onChange={(e) => setFormData({...formData, price: e.target.value})}
+                    onChange={(e) => {
+                      const rawValue = e.target.value.replace(/\D/g, '');
+                      const formattedValue = rawValue ? new Intl.NumberFormat('id-ID').format(rawValue) : '';
+                      setFormData({...formData, price: formattedValue});
+                    }}
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />

@@ -30,7 +30,7 @@ class ProductController extends Controller
             $query->where('category_id', $category);
         }
 
-        $products = $query->with('category')
+        $products = $query->with(['category', 'images'])
             ->paginate($perPage);
 
         return response()->json([
@@ -59,6 +59,8 @@ class ProductController extends Controller
             'location' => 'nullable|in:Air Asin/Laut,Air Tawar,Kolam',
             'specifications' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'additional_images' => 'nullable|array',
+            'additional_images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         if ($validator->fails()) {
@@ -97,6 +99,22 @@ class ProductController extends Controller
 
         $product = Product::create($data);
 
+        // Handle additional images
+        if ($request->hasFile('additional_images')) {
+            foreach ($request->file('additional_images') as $file) {
+                try {
+                    $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                    $path = $file->storeAs('products', $filename, 'public');
+                    \App\Models\ProductImage::create([
+                        'product_id' => $product->id,
+                        'image_path' => '/storage/' . $path,
+                    ]);
+                } catch (\Exception $e) {
+                    // Ignore individual image failure
+                }
+            }
+        }
+
         return response()->json([
             'message' => 'Product created successfully',
             'product' => $product,
@@ -108,7 +126,7 @@ class ProductController extends Controller
      */
     public function show($id)
     {
-        $product = Product::with('category')->find($id);
+        $product = Product::with(['category', 'images'])->find($id);
 
         if (!$product) {
             return response()->json(['message' => 'Product not found'], 404);
@@ -138,6 +156,8 @@ class ProductController extends Controller
             'location' => 'nullable|in:Air Asin/Laut,Air Tawar,Kolam',
             'specifications' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'additional_images' => 'nullable|array',
+            'additional_images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         if ($validator->fails()) {
@@ -176,6 +196,22 @@ class ProductController extends Controller
 
         $product->update($data);
 
+        // Handle additional images
+        if ($request->hasFile('additional_images')) {
+            foreach ($request->file('additional_images') as $file) {
+                try {
+                    $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                    $path = $file->storeAs('products', $filename, 'public');
+                    \App\Models\ProductImage::create([
+                        'product_id' => $product->id,
+                        'image_path' => '/storage/' . $path,
+                    ]);
+                } catch (\Exception $e) {
+                    // Ignore individual image failure
+                }
+            }
+        }
+
         return response()->json([
             'message' => 'Product updated successfully',
             'product' => $product,
@@ -197,6 +233,31 @@ class ProductController extends Controller
 
         return response()->json([
             'message' => 'Product deleted successfully',
+        ], 200);
+    }
+
+    /**
+     * Delete additional product image
+     */
+    public function destroyImage($id, $imageId)
+    {
+        $image = \App\Models\ProductImage::where('product_id', $id)->find($imageId);
+        
+        if (!$image) {
+            return response()->json(['message' => 'Image not found'], 404);
+        }
+
+        try {
+            $path = str_replace('/storage/', '', $image->image_path);
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
+        } catch (\Exception $e) {
+            // Ignore storage deletion error
+        }
+
+        $image->delete();
+
+        return response()->json([
+            'message' => 'Image deleted successfully',
         ], 200);
     }
 

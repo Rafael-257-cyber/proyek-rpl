@@ -7,12 +7,15 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('authToken'));
   const [loading, setLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState(null);
 
   // Check if user is logged in on mount
   useEffect(() => {
     if (token) {
       fetchCurrentUser();
+    } else {
+      setIsInitializing(false);
     }
   }, []);
 
@@ -24,6 +27,8 @@ export const AuthProvider = ({ children }) => {
       console.error('Failed to fetch user:', err);
       localStorage.removeItem('authToken');
       setToken(null);
+    } finally {
+      setIsInitializing(false);
     }
   };
 
@@ -102,7 +107,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, error, register, login, logout, updateProfile }}>
+    <AuthContext.Provider value={{ user, token, loading, isInitializing, error, register, login, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -88,6 +88,36 @@ class OrderController extends Controller
                     Product::where('id', $item['product_id'])->decrement('stock', $item['quantity']);
                 }
 
+                // Configure Midtrans
+                \Midtrans\Config::$serverKey = config('midtrans.server_key');
+                \Midtrans\Config::$isProduction = config('midtrans.is_production');
+                \Midtrans\Config::$isSanitized = config('midtrans.is_sanitized');
+                \Midtrans\Config::$is3ds = config('midtrans.is_3ds');
+
+                $params = array(
+                    'transaction_details' => array(
+                        'order_id' => 'INV-' . $order->id,
+                        'gross_amount' => (int) $order->total_price,
+                    ),
+                    'customer_details' => array(
+                        'first_name' => $order->user->name,
+                        'email' => $order->user->email,
+                        'phone' => $order->shipping_phone,
+                    ),
+                    'callbacks' => array(
+                        'finish' => env('FRONTEND_URL', 'http://localhost:3000') . '/orders/' . $order->id,
+                        'unfinish' => env('FRONTEND_URL', 'http://localhost:3000') . '/orders/' . $order->id,
+                        'error' => env('FRONTEND_URL', 'http://localhost:3000') . '/orders/' . $order->id,
+                    )
+                );
+
+                try {
+                    $snapToken = \Midtrans\Snap::getSnapToken($params);
+                    $order->update(['snap_token' => $snapToken]);
+                } catch (\Exception $e) {
+                    throw new \RuntimeException('Failed to get payment token: ' . $e->getMessage());
+                }
+
                 return $order->load('items.product', 'user');
             });
         } catch (\RuntimeException $exception) {
@@ -122,6 +152,34 @@ class OrderController extends Controller
         ], 200);
     }
 
+    public function updatePaymentMethod(Request $request, $orderId)
+    {
+        $request->validate([
+            'payment_method' => 'required|string|in:transfer,cod,ewallet,bank_transfer,credit_card,qris,midtrans',
+        ]);
+
+        $order = Order::where('id', $orderId)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if (!$order) {
+            return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        if ($order->status !== 'pending_payment') {
+            return response()->json(['message' => 'Hanya pesanan yang belum dibayar yang bisa diganti metode pembayarannya'], 400);
+        }
+
+        $order->update([
+            'payment_method' => $request->payment_method
+        ]);
+
+        return response()->json([
+            'message' => 'Metode pembayaran berhasil diperbarui',
+            'order' => $order
+        ], 200);
+    }
+
     /**
      * Get order details
      */
@@ -136,9 +194,108 @@ class OrderController extends Controller
             return response()->json(['message' => 'Order not found'], 404);
         }
 
+        // Auto-sync status with Midtrans for local development/fallback
+        if ($order->payment_status === 'pending') {
+            try {
+                \Midtrans\Config::$serverKey = config('midtrans.server_key');
+                \Midtrans\Config::$isProduction = config('midtrans.is_production');
+                $midtransOrderId = 'INV-' . $order->id;
+                $statusResponse = \Midtrans\Transaction::status($midtransOrderId);
+
+                $transactionStatus = $statusResponse->transaction_status;
+                $fraudStatus = $statusResponse->fraud_status ?? null;
+
+                if ($transactionStatus == 'capture' || $transactionStatus == 'settlement') {
+                    if ($fraudStatus == 'challenge') {
+                        $order->update([
+                            'status' => 'pending_verification',
+                            'payment_status' => 'pending_verification',
+                        ]);
+                    } else {
+                        $order->update([
+                            'status' => 'processing',
+                            'payment_status' => 'paid',
+                        ]);
+                    }
+                } else if ($transactionStatus == 'cancel' || $transactionStatus == 'deny' || $transactionStatus == 'expire') {
+                    $order->update([
+                        'status' => 'cancelled',
+                        'payment_status' => 'failed',
+                    ]);
+                }
+            } catch (\Exception $e) {
+                // Ignore if Midtrans throws 404 meaning transaction not started
+            }
+        }
+
         return response()->json([
             'order' => $order
         ], 200);
+    }
+
+    public function syncMidtrans(Request $request, $orderId)
+    {
+        $order = Order::where('id', $orderId)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if (!$order) {
+            return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        $midtransId = $request->input('transaction_id') ?? $request->input('order_id');
+        if (!$midtransId) {
+            return response()->json(['message' => 'Transaction ID or Order ID is required'], 400);
+        }
+
+        try {
+            \Midtrans\Config::$serverKey = config('midtrans.server_key');
+            \Midtrans\Config::$isProduction = config('midtrans.is_production');
+            $statusResponse = \Midtrans\Transaction::status($midtransId);
+
+            $transactionStatus = $statusResponse->transaction_status;
+            $fraudStatus = $statusResponse->fraud_status ?? null;
+
+            if ($transactionStatus == 'capture' || $transactionStatus == 'settlement') {
+                if ($fraudStatus == 'challenge') {
+                    $order->update([
+                        'status' => 'pending_verification',
+                        'payment_status' => 'pending_verification',
+                    ]);
+                } else {
+                    $order->update([
+                        'status' => 'processing',
+                        'payment_status' => 'paid',
+                    ]);
+                }
+            } else if ($transactionStatus == 'cancel' || $transactionStatus == 'deny' || $transactionStatus == 'expire') {
+                $order->update([
+                    'status' => 'cancelled',
+                    'payment_status' => 'failed',
+                ]);
+            }
+
+            return response()->json([
+                'message' => 'Order synced successfully',
+                'order' => $order
+            ], 200);
+
+        } catch (\Exception $e) {
+            // Local environment fallback: if Midtrans API 404s due to missing webhooks in DANA sandbox, 
+            // but frontend reports success, force it.
+            if (config('app.env') === 'local' && $request->input('transaction_status') === 'settlement') {
+                $order->update([
+                    'status' => 'processing',
+                    'payment_status' => 'paid',
+                ]);
+                return response()->json([
+                    'message' => 'Forced sync in local environment',
+                    'order' => $order
+                ], 200);
+            }
+
+            return response()->json(['message' => 'Failed to sync: ' . $e->getMessage()], 400);
+        }
     }
 
     /**

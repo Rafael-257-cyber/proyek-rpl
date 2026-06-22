@@ -20,6 +20,7 @@ class RatingController extends Controller
                 'order_item_id' => 'required|exists:order_items,id',
                 'rating' => 'required|integer|min:1|max:5',
                 'review' => 'nullable|string|max:1000',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             ]);
 
             $orderItem = OrderItem::with('order')->findOrFail($validated['order_item_id']);
@@ -38,19 +39,28 @@ class RatingController extends Controller
                 return response()->json(['message' => 'Anda sudah memberikan rating produk ini'], 422);
             }
 
+            $imagePath = null;
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('ratings', 'public');
+            }
+
             $rating = Rating::create([
                 'user_id' => Auth::id(),
                 'product_id' => $orderItem->product_id,
                 'order_item_id' => $validated['order_item_id'],
                 'rating' => $validated['rating'],
-                'review' => $validated['review'],
+                'review' => $validated['review'] ?? null,
+                'image' => $imagePath,
             ]);
 
             return response()->json([
                 'message' => 'Rating berhasil disimpan',
                 'data' => $rating->load('user', 'product'),
             ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Rating Error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return response()->json([
                 'message' => 'Gagal menyimpan rating',
                 'error' => $e->getMessage(),

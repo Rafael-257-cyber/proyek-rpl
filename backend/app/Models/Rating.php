@@ -15,6 +15,7 @@ class Rating extends Model
         'order_item_id',
         'rating',
         'review',
+        'image',
     ];
 
     protected $casts = [
