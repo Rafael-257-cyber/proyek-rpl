@@ -1,0 +1,5 @@
+# Block access to .env, vendor, and sensitive directories
+RewriteEngine On
+RewriteRule ^\.env - [F,L]
+RewriteRule ^composer\.(json|lock) - [F,L]
+RewriteRule ^(app|bootstrap|config|database|resources|routes|tests|vendor|storage/framework|storage/logs)/ - [F,L]

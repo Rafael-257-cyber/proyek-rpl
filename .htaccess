@@ -1,0 +1,13 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Abaikan perutean untuk folder API dan folder Storage agar bisa diakses langsung
+  RewriteRule ^api/ - [L]
+  RewriteRule ^storage/ - [L]
+  
+  # Jika file atau folder fisik yang diakses tidak ada di htdocs, arahkan ke index.html
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
