@@ -60,6 +60,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Order Routes (User specific)
     Route::prefix('orders')->group(function () {
+        Route::post('/{id}/payment-session', [OrderController::class, 'renewPaymentSession']);
         Route::post('/checkout', [OrderController::class, 'checkout']);
         Route::get('/', [OrderController::class, 'userOrders']);
         Route::get('/{id}', [OrderController::class, 'show']);

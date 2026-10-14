@@ -201,7 +201,11 @@ export default function CheckoutPage() {
       // Just navigate to order tracking page. Snap popup will be opened there.
       navigate(`/orders/${orderId}`);
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal memproses pesanan');
+      const responseData = err.response?.data;
+      const validationErrors = Object.values(responseData?.errors || {}).flat();
+      setError(validationErrors.length > 0
+        ? validationErrors.join(' ')
+        : responseData?.message || 'Gagal memproses pesanan');
       window.scrollTo(0, 0);
     } finally {
       setLoading(false);

@@ -13,6 +13,8 @@ return new class extends Migration
     public function up(): void
     {
         // Modify the role enum to include 'customer'
+        // SQLite receives the full allowed enum values in the base migration.
+        if (DB::getDriverName() !== 'mysql') return;
         DB::statement("ALTER TABLE users MODIFY role ENUM('user', 'admin', 'customer') DEFAULT 'user'");
     }
 
@@ -21,6 +23,8 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // SQLite receives the full allowed enum values in the base migration.
+        if (DB::getDriverName() !== 'mysql') return;
         DB::statement("ALTER TABLE users MODIFY role ENUM('user', 'admin') DEFAULT 'user'");
     }
 };

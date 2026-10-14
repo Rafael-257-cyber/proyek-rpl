@@ -22,7 +22,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // Create admin user
-        User::create([
+        User::firstOrCreate(['email' => 'admin@example.com'], [
             'name' => 'Admin User',
             'email' => 'admin@example.com',
             'password' => bcrypt('password'),
@@ -30,7 +30,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // Create regular user
-        User::create([
+        User::firstOrCreate(['email' => 'test@example.com'], [
             'name' => 'Test User',
             'email' => 'test@example.com',
             'password' => bcrypt('password'),

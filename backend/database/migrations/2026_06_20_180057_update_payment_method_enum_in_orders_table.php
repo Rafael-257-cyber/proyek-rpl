@@ -12,6 +12,8 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // SQLite receives the full allowed enum values in the base migration.
+        if (DB::getDriverName() !== 'mysql') return;
         DB::statement("ALTER TABLE orders MODIFY COLUMN payment_method ENUM('transfer','cod','ewallet','bank_transfer','credit_card','qris','midtrans') NOT NULL DEFAULT 'transfer'");
     }
 
@@ -20,6 +22,8 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // SQLite receives the full allowed enum values in the base migration.
+        if (DB::getDriverName() !== 'mysql') return;
         DB::statement("ALTER TABLE orders MODIFY COLUMN payment_method ENUM('transfer','cod') NOT NULL DEFAULT 'transfer'");
     }
 };

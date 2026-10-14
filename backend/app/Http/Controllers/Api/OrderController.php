@@ -13,6 +13,66 @@ use Illuminate\Support\Facades\Validator;
 
 class OrderController extends Controller
 {
+    public function renewPaymentSession(Request $request, $orderId)
+    {
+        return DB::transaction(function () use ($request, $orderId) {
+            $order = Order::where('user_id', $request->user()->id)->lockForUpdate()->findOrFail($orderId);
+            if ($order->status !== 'pending_payment' || $order->payment_status !== 'pending' || !$order->snap_token) {
+                return response()->json(['message' => 'Metode hanya bisa diganti sebelum pembayaran berhasil.'], 409);
+            }
+
+            \Midtrans\Config::$serverKey = config('midtrans.server_key');
+            \Midtrans\Config::$isProduction = config('midtrans.is_production');
+            \Midtrans\Config::$isSanitized = config('midtrans.is_sanitized');
+            \Midtrans\Config::$is3ds = config('midtrans.is_3ds');
+            $oldInvoice = $order->midtrans_order_id ?: 'INV-' . $order->id;
+            $oldStatus = null;
+            try {
+                $status = app(\App\Services\MidtransStatus::class)->fetch($order);
+                $oldStatus = $status->transaction_status ?? '';
+                if (!in_array($oldStatus, ['pending', 'deny', 'cancel', 'expire'], true)) {
+                    return response()->json(['message' => 'Pembayaran sudah diterima atau sedang diverifikasi. Silakan cek status pesanan.'], 409);
+                }
+            } catch (\Exception $exception) {
+                if ((int) $exception->getCode() !== 404) {
+                    return response()->json(['message' => 'Status pembayaran belum dapat diperiksa. Coba lagi sebentar.'], 502);
+                }
+            }
+
+            $invoice = 'INV-' . $order->id . '-' . bin2hex(random_bytes(8));
+            try {
+                // Prepare a new, unique payment attempt before disabling the old one.
+                // If token creation fails, the existing payment remains usable.
+                $token = \Midtrans\Snap::getSnapToken([
+                    'transaction_details' => ['order_id' => $invoice, 'gross_amount' => (int) $order->total_price],
+                    'customer_details' => [
+                        'first_name' => $order->shipping_name ?: $request->user()->name,
+                        'email' => $request->user()->email,
+                        'phone' => $order->shipping_phone,
+                    ],
+                    'callbacks' => ['finish' => env('FRONTEND_URL', 'http://localhost:3000') . '/orders/' . $order->id],
+                ]);
+                if ($oldStatus === 'pending') {
+                    if ((string) \Midtrans\Transaction::cancel($oldInvoice) !== '200') {
+                        throw new \RuntimeException('Pending transaction cancellation was not confirmed');
+                    }
+                } elseif ($oldStatus === null) {
+                    // Re-creating the unused old invoice invalidates its previous token.
+                    \Midtrans\Snap::getSnapToken([
+                        'transaction_details' => ['order_id' => $oldInvoice, 'gross_amount' => (int) $order->total_price],
+                    ]);
+                }
+                $order->update(['snap_token' => $token, 'midtrans_order_id' => $invoice]);
+                return response()->json(['order' => $order, 'snap_token' => $token]);
+            } catch (\Exception $exception) {
+                \Illuminate\Support\Facades\Log::warning('Midtrans payment session change failed', [
+                    'order_id' => $order->id, 'code' => $exception->getCode(),
+                ]);
+                return response()->json(['message' => 'Metode belum dapat diganti. Pembayaran mungkin sudah selesai atau layanan sedang bermasalah. Kembali ke pesanan untuk memeriksa status.'], 502);
+            }
+        });
+    }
+
     /**
      * Create order (Checkout)
      */
@@ -195,12 +255,11 @@ class OrderController extends Controller
         }
 
         // Auto-sync status with Midtrans for local development/fallback
-        if ($order->payment_status === 'pending') {
+        if ($order->snap_token && in_array($order->payment_status, ['pending', 'pending_verification'], true)) {
             try {
                 \Midtrans\Config::$serverKey = config('midtrans.server_key');
                 \Midtrans\Config::$isProduction = config('midtrans.is_production');
-                $midtransOrderId = 'INV-' . $order->id;
-                $statusResponse = \Midtrans\Transaction::status($midtransOrderId);
+                $statusResponse = app(\App\Services\MidtransStatus::class)->fetch($order);
 
                 $transactionStatus = $statusResponse->transaction_status;
                 $fraudStatus = $statusResponse->fraud_status ?? null;
@@ -235,66 +294,50 @@ class OrderController extends Controller
 
     public function syncMidtrans(Request $request, $orderId)
     {
-        $order = Order::where('id', $orderId)
-            ->where('user_id', $request->user()->id)
-            ->first();
-
-        if (!$order) {
-            return response()->json(['message' => 'Order not found'], 404);
+        $request->validate(['transaction_id' => 'nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/']);
+        $order = Order::where('user_id', $request->user()->id)->find($orderId);
+        if (!$order) return response()->json(['message' => 'Order not found'], 404);
+        if ($order->payment_status === 'paid') {
+            return response()->json(['message' => 'Order already paid', 'order' => $order]);
         }
 
-        $midtransId = $request->input('transaction_id') ?? $request->input('order_id');
-        if (!$midtransId) {
-            return response()->json(['message' => 'Transaction ID or Order ID is required'], 400);
-        }
-
+        \Midtrans\Config::$serverKey = config('midtrans.server_key');
+        \Midtrans\Config::$isProduction = config('midtrans.is_production');
         try {
-            \Midtrans\Config::$serverKey = config('midtrans.server_key');
-            \Midtrans\Config::$isProduction = config('midtrans.is_production');
-            $statusResponse = \Midtrans\Transaction::status($midtransId);
+            // Snap may provide a transaction UUID before lookup by invoice is available.
+            $result = app(\App\Services\MidtransStatus::class)->fetch($order, $request->input('transaction_id'));
+            $remoteInvoice = (string) ($result->order_id ?? '');
+            if (!preg_match('/^INV-' . $order->id . '(?:-[a-f0-9]{16})?$/', $remoteInvoice)
+                || !isset($result->gross_amount)
+                || (float) $result->gross_amount !== (float) $order->total_price) {
+                return response()->json(['message' => 'Transaksi pembayaran tidak sesuai dengan pesanan.'], 409);
+            }
 
-            $transactionStatus = $statusResponse->transaction_status;
-            $fraudStatus = $statusResponse->fraud_status ?? null;
-
-            if ($transactionStatus == 'capture' || $transactionStatus == 'settlement') {
-                if ($fraudStatus == 'challenge') {
-                    $order->update([
-                        'status' => 'pending_verification',
-                        'payment_status' => 'pending_verification',
+            $order = DB::transaction(function () use ($order, $result, $remoteInvoice) {
+                $locked = Order::lockForUpdate()->findOrFail($order->id);
+                if ($locked->payment_status === 'paid') return $locked;
+                $status = $result->transaction_status ?? '';
+                if (in_array($status, ['settlement', 'capture'], true)) {
+                    $challenge = ($result->fraud_status ?? null) === 'challenge';
+                    $locked->update([
+                        'status' => $challenge ? 'pending_verification' : 'processing',
+                        'payment_status' => $challenge ? 'pending_verification' : 'paid',
                     ]);
-                } else {
-                    $order->update([
-                        'status' => 'processing',
-                        'payment_status' => 'paid',
-                    ]);
+                } elseif ($remoteInvoice === ($locked->midtrans_order_id ?: 'INV-' . $locked->id)
+                    && in_array($status, ['cancel', 'deny', 'expire'], true)) {
+                    $locked->update(['status' => 'cancelled', 'payment_status' => 'failed']);
                 }
-            } else if ($transactionStatus == 'cancel' || $transactionStatus == 'deny' || $transactionStatus == 'expire') {
-                $order->update([
-                    'status' => 'cancelled',
-                    'payment_status' => 'failed',
-                ]);
-            }
-
+                return $locked;
+            });
             return response()->json([
-                'message' => 'Order synced successfully',
-                'order' => $order
-            ], 200);
-
-        } catch (\Exception $e) {
-            // Local environment fallback: if Midtrans API 404s due to missing webhooks in DANA sandbox, 
-            // but frontend reports success, force it.
-            if (config('app.env') === 'local' && $request->input('transaction_status') === 'settlement') {
-                $order->update([
-                    'status' => 'processing',
-                    'payment_status' => 'paid',
-                ]);
-                return response()->json([
-                    'message' => 'Forced sync in local environment',
-                    'order' => $order
-                ], 200);
-            }
-
-            return response()->json(['message' => 'Failed to sync: ' . $e->getMessage()], 400);
+                'message' => $order->payment_status === 'paid' ? 'Pembayaran berhasil dikonfirmasi.' : 'Midtrans belum mengonfirmasi pembayaran. Status akan diperiksa otomatis.',
+                'order' => $order,
+            ]);
+        } catch (\Exception $exception) {
+            \Illuminate\Support\Facades\Log::warning('Midtrans status verification failed', [
+                'order_id' => $order->id, 'code' => $exception->getCode(),
+            ]);
+            return response()->json(['message' => (int) $exception->getCode() === 409 ? 'Transaksi pembayaran tidak sesuai dengan pesanan.' : 'Konfirmasi pembayaran belum diterima dari Midtrans. Status akan diperiksa otomatis.'], (int) $exception->getCode() === 409 ? 409 : 502);
         }
     }
 

@@ -24,7 +24,24 @@ export default function OrderTrackingPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [isChangingPayment, setIsChangingPayment] = useState(false);
   const [newPaymentMethod, setNewPaymentMethod] = useState('');
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [changingSession, setChangingSession] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
   const pollingTimerRef = useRef(null);
+  const loadingOrderRef = useRef(false);
+  const paymentStatusRef = useRef(new Map());
+  const announcedPaymentsRef = useRef(new Set());
+
+  const updatePaymentNotice = (fetchedOrder, fromPayment = false) => {
+    const previousStatus = paymentStatusRef.current.get(fetchedOrder.id);
+    paymentStatusRef.current.set(fetchedOrder.id, fetchedOrder.payment_status);
+    if (fetchedOrder.payment_status !== 'paid' || announcedPaymentsRef.current.has(fetchedOrder.id)) return;
+    announcedPaymentsRef.current.add(fetchedOrder.id);
+    // Opening an already-paid order should not show a new payment notification.
+    if (fromPayment || (previousStatus && previousStatus !== 'paid')) {
+      setSuccessMessage('Pembayaran berhasil dikonfirmasi.');
+    }
+  };
 
   // Scroll to top on mount
   useEffect(() => {
@@ -33,6 +50,8 @@ export default function OrderTrackingPage() {
 
   // Redirect if not authenticated
   const loadOrder = async ({ silent = false } = {}) => {
+    if (loadingOrderRef.current) return;
+    loadingOrderRef.current = true;
     if (!silent) {
       setLoading(true);
     } else {
@@ -42,7 +61,8 @@ export default function OrderTrackingPage() {
     try {
       const response = await ordersAPI.getOrder(orderId);
       const fetchedOrder = response.data.order || response.data;
-      setOrder(fetchedOrder);
+      setOrder(previous => previous?.id === fetchedOrder.id && previous.payment_status === 'paid' && fetchedOrder.payment_status === 'pending' ? previous : fetchedOrder);
+      updatePaymentNotice(fetchedOrder);
       setProofUploaded(Boolean(fetchedOrder.bukti_bayar));
       setPageError('');
 
@@ -53,6 +73,7 @@ export default function OrderTrackingPage() {
     } catch (err) {
       setPageError(err.response?.data?.message || 'Pesanan tidak ditemukan');
     } finally {
+      loadingOrderRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -89,17 +110,89 @@ export default function OrderTrackingPage() {
 
     checkUrlParamsAndLoad();
 
+    const refreshOnReturn = () => {
+      if (document.visibilityState === 'visible') loadOrder({ silent: true });
+    };
+    window.addEventListener('focus', refreshOnReturn);
+    document.addEventListener('visibilitychange', refreshOnReturn);
     pollingTimerRef.current = setInterval(() => {
       loadOrder({ silent: true });
-    }, 15000);
+    }, 3000);
 
     return () => {
+      window.removeEventListener('focus', refreshOnReturn);
+      document.removeEventListener('visibilitychange', refreshOnReturn);
       if (pollingTimerRef.current) {
         clearInterval(pollingTimerRef.current);
         pollingTimerRef.current = null;
       }
     };
   }, [orderId, token, navigate]);
+
+  const closePayment = () => {
+    window.snap?.hide();
+    setPaymentOpen(false);
+    setPaymentError('');
+    loadOrder({ silent: true });
+  };
+
+  const openPayment = (snapToken) => {
+    if (!window.snap) {
+      setPageError('Layanan pembayaran belum siap. Refresh halaman dan coba lagi.');
+      return;
+    }
+    setPaymentError('');
+    setPaymentOpen(true);
+    window.snap.pay(snapToken, {
+      uiMode: 'qr',
+      onSuccess: async (result) => {
+        setPaymentOpen(false);
+        try {
+          const response = await ordersAPI.syncMidtrans(orderId, {
+            transaction_id: result.transaction_id,
+          });
+          setOrder(response.data.order);
+          updatePaymentNotice(response.data.order, true);
+          if (response.data.order.payment_status !== 'paid') setSuccessMessage(response.data.message);
+        } catch (err) {
+          setSuccessMessage(err.response?.data?.message || 'Pembayaran sedang dikonfirmasi. Status akan diperiksa otomatis.');
+        }
+        loadOrder({ silent: true });
+      },
+      onPending: async (result) => {
+        setPaymentOpen(false);
+        try {
+          const response = await ordersAPI.syncMidtrans(orderId, { transaction_id: result.transaction_id });
+          setOrder(response.data.order);
+          updatePaymentNotice(response.data.order, true);
+        } catch (err) {
+          setSuccessMessage(err.response?.data?.message || 'Status pembayaran sedang diperiksa.');
+        }
+        loadOrder({ silent: true });
+      },
+      onError: () => { setPaymentOpen(false); loadOrder({ silent: true }); },
+      onClose: () => { setPaymentOpen(false); loadOrder({ silent: true }); },
+    });
+  };
+
+  const changePaymentSession = async () => {
+    if (changingSession) return;
+    setChangingSession(true);
+    setPaymentError('');
+    try {
+      const response = await ordersAPI.renewPaymentSession(orderId);
+      window.snap?.hide();
+      setOrder(response.data.order);
+      openPayment(response.data.snap_token);
+    } catch (err) {
+      setPaymentError(err.response?.data?.message || 'Tidak dapat mengganti metode pembayaran. Coba lagi.');
+      loadOrder({ silent: true });
+    } finally {
+      setChangingSession(false);
+    }
+  };
+
+  useEffect(() => () => { window.snap?.hide(); }, [orderId]);
 
   const getStatusColor = (status) => {
     const statusMap = {
@@ -328,6 +421,12 @@ export default function OrderTrackingPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 mb-6">
                   <div>
+                    <p className="text-gray-500">Status Pembayaran</p>
+                    <p className={`font-semibold ${order.payment_status === 'paid' ? 'text-green-700' : 'text-gray-800'}`}>
+                      {{ paid: 'Sudah Dibayar', pending: 'Menunggu Pembayaran', pending_verification: 'Menunggu Verifikasi', failed: 'Gagal', refunded: 'Dikembalikan' }[order.payment_status] || '-'}
+                    </p>
+                  </div>
+                  <div>
                     <p className="text-gray-500">Metode Pembayaran</p>
                     <div className="font-medium text-gray-800 flex items-center gap-2">
                       {order.payment_method || '-'}
@@ -375,27 +474,7 @@ export default function OrderTrackingPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (window.snap) {
-                          window.snap.pay(order.snap_token, {
-                            onSuccess: async (result) => {
-                              try {
-                                await ordersAPI.syncMidtrans(order.id, {
-                                   transaction_id: result.transaction_id,
-                                   order_id: result.order_id,
-                                   transaction_status: result.transaction_status
-                                });
-                              } catch (err) {
-                                console.error('Failed to sync midtrans status', err);
-                              }
-                              loadOrder();
-                            },
-                            onPending: () => loadOrder(),
-                            onError: () => loadOrder(),
-                            onClose: () => loadOrder()
-                          });
-                        }
-                      }}
+                      onClick={() => openPayment(order.snap_token)}
                       className="whitespace-nowrap inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-700 transition-colors shadow-sm"
                     >
                       Bayar Sekarang
@@ -667,6 +746,20 @@ export default function OrderTrackingPage() {
                 Simpan
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {paymentOpen && (
+        <div className="fixed bottom-2 right-2 sm:bottom-4 sm:right-4 max-w-[calc(100vw-1rem)] rounded-xl bg-white/95 border border-gray-200 shadow-lg p-1.5" style={{ zIndex: 2147483647 }} role="region" aria-label="Navigasi pembayaran">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={closePayment} disabled={changingSession} aria-label="Kembali ke pesanan" className="min-h-[44px] rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">Kembali</button>
+              <button type="button" onClick={changePaymentSession} disabled={changingSession || order?.payment_status === 'paid'} className="min-h-[44px] rounded-lg bg-blue-600 text-white px-3 py-2 text-xs font-semibold hover:bg-blue-700 disabled:opacity-50">
+                {changingSession ? 'Membuka pilihan...' : 'Pilih metode lain'}
+              </button>
+            </div>
+            {paymentError && <p role="alert" className="max-w-[260px] px-1 text-xs text-red-600">{paymentError}</p>}
           </div>
         </div>
       )}

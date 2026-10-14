@@ -40,6 +40,7 @@ class Order extends Model
         'payment_proof_uploaded_at',
         'payment_due_at',
         'snap_token',
+        'midtrans_order_id',
     ];
 
     protected $casts = [
