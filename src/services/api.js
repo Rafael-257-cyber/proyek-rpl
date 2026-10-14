@@ -55,6 +55,7 @@ export const productsAPI = {
 
 // Order API
 export const ordersAPI = {
+  renewPaymentSession: (orderId) => api.post(`/orders/${orderId}/payment-session`),
   checkout: (data) => api.post('/orders/checkout', data),
   getUserOrders: () => api.get('/orders'),
   getOrder: (id) => api.get(`/orders/${id}`),

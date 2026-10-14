@@ -12,7 +12,7 @@ class PromoSeeder extends Seeder
      */
     public function run(): void
     {
-        $promo1 = \App\Models\Promo::create([
+        $promo1 = \App\Models\Promo::firstOrCreate(['title' => 'Perlengkapan Mancing Kualitas Terbaik', 'discount_percentage' => 10.00], [
             'title' => 'Perlengkapan Mancing Kualitas Terbaik',
             'subtitle' => 'Temukan alat pancing terbaik dengan harga bersahabat',
             'discount_percentage' => 10.00,
@@ -21,7 +21,7 @@ class PromoSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        $promo2 = \App\Models\Promo::create([
+        $promo2 = \App\Models\Promo::firstOrCreate(['title' => 'Koleksi Umpan Terbaru', 'discount_percentage' => 20.00], [
             'title' => 'Koleksi Umpan Terbaru',
             'subtitle' => 'Tingkatkan hasil tangkapan dengan umpan inovatif kami (Diskon 20%)',
             'discount_percentage' => 20.00,
@@ -30,7 +30,7 @@ class PromoSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        $promo3 = \App\Models\Promo::create([
+        $promo3 = \App\Models\Promo::firstOrCreate(['title' => 'Perlengkapan Mancing Kualitas Terbaik', 'discount_percentage' => 50.00], [
             'title' => 'Perlengkapan Mancing Kualitas Terbaik',
             'subtitle' => 'Temukan alat pancing terbaik dengan harga bersahabat',
             'discount_percentage' => 50.00,
@@ -43,13 +43,13 @@ class PromoSeeder extends Seeder
         $products = \App\Models\Product::all();
         if ($products->count() > 0) {
             // Apply 50% promo to first 2 products
-            $promo1->products()->attach($products->take(2)->pluck('id'));
+            $promo1->products()->syncWithoutDetaching($products->take(2)->pluck('id'));
             
             // Apply 20% promo to next 3 products
-            $promo2->products()->attach($products->slice(2, 3)->pluck('id'));
+            $promo2->products()->syncWithoutDetaching($products->slice(2, 3)->pluck('id'));
             
             // Apply 10% promo to next 4 products
-            $promo3->products()->attach($products->slice(5, 4)->pluck('id'));
+            $promo3->products()->syncWithoutDetaching($products->slice(5, 4)->pluck('id'));
         }
     }
 }
