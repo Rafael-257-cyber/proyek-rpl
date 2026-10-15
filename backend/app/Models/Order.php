@@ -13,6 +13,8 @@ class Order extends Model
         // English fields
         'user_id',
         'shipping_name',
+        'shipping_destination_id',
+        'shipping_weight_grams',
         'total_price',
         'status',
         'payment_method',

@@ -15,6 +15,7 @@ class Product extends Model
         'description',
         'price',
         'stock',
+        'weight_grams',
         'brand',
         'location',
         'image',
@@ -22,6 +23,7 @@ class Product extends Model
     ];
 
     protected $casts = [
+        'weight_grams' => 'integer',
         'specifications' => 'array',
         'price' => 'decimal:2',
     ];
