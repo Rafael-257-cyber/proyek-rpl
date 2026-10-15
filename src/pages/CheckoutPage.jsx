@@ -5,83 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { ordersAPI, getImageUrl } from '../services/api';
+import { ordersAPI, shippingAPI, getImageUrl } from '../services/api';
 
-// ─── Shipping Couriers Data ──────────────────────────────────────────────────
-const COURIERS = [
-  {
-    id: 'jne-reg',
-    courier: 'JNE',
-    service: 'Reguler (REG)',
-    estimate: '2–5 hari kerja',
-    cost: 15000,
-    logo: '📦',
-    color: '#e63329',
-  },
-  {
-    id: 'jne-yes',
-    courier: 'JNE',
-    service: 'YES (Yakin Esok Sampai)',
-    estimate: '1–2 hari kerja',
-    cost: 28000,
-    logo: '⚡',
-    color: '#e63329',
-  },
-  {
-    id: 'jnt',
-    courier: 'J&T Express',
-    service: 'Express',
-    estimate: '1–3 hari kerja',
-    cost: 18000,
-    logo: '🚚',
-    color: '#e31f26',
-  },
-  {
-    id: 'sicepat-reg',
-    courier: 'SiCepat',
-    service: 'REG',
-    estimate: '2–3 hari kerja',
-    cost: 16000,
-    logo: '🏃',
-    color: '#f97316',
-  },
-  {
-    id: 'sicepat-best',
-    courier: 'SiCepat',
-    service: 'BEST (Besok Sampai)',
-    estimate: 'Hari ini/besok',
-    cost: 35000,
-    logo: '🔥',
-    color: '#f97316',
-  },
-  {
-    id: 'pos',
-    courier: 'Pos Indonesia',
-    service: 'Paket Kilat Khusus',
-    estimate: '3–7 hari kerja',
-    cost: 12000,
-    logo: '📮',
-    color: '#e11d48',
-  },
-  {
-    id: 'anteraja',
-    courier: 'AnterAja',
-    service: 'Reguler (Promo Gratis Ongkir)',
-    estimate: '2–4 hari kerja',
-    cost: 0,
-    logo: '🛵',
-    color: '#f59e0b',
-  },
-  {
-    id: 'ninja',
-    courier: 'Ninja Xpress',
-    service: 'Standar',
-    estimate: '2–4 hari kerja',
-    cost: 15000,
-    logo: '🥷',
-    color: '#6366f1',
-  },
-];
+const COURIER_NAMES = {
+  jne: 'JNE', anteraja: 'AnterAja', tiki: 'TIKI', spx: 'Shopee Express',
+  pos: 'POS Indonesia', ide: 'ID Express', sap: 'SAP Express',
+  lion: 'Lion Parcel', sicepat: 'SiCepat', jnt: 'J&T Express',
+};
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -98,7 +28,75 @@ export default function CheckoutPage() {
     shipping_name: '',
   });
 
-  const [selectedCourier, setSelectedCourier] = useState(null);
+  const [selectedRate, setSelectedCourier] = useState(null);
+  const [destinationQuery, setDestinationQuery] = useState('');
+  const [destinations, setDestinations] = useState([]);
+  const [destination, setDestination] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [shippingError, setShippingError] = useState('');
+  const [couriers, setCouriers] = useState([]);
+  const [courierCode, setCourierCode] = useState('');
+  const [quote, setQuote] = useState(null);
+  const [ratesLoading, setRatesLoading] = useState(false);
+  const [retryRates, setRetryRates] = useState(0);
+  const itemsKey = JSON.stringify(cartItems.map(item => ({ product_id: item.id, quantity: item.quantity })));
+  const quoteKey = JSON.stringify([destination?.id, courierCode, itemsKey, retryRates]);
+  const selectedCourier = selectedRate?.quoteKey === quoteKey ? selectedRate : null;
+  const rates = quote?.key === quoteKey ? quote.rates : [];
+
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    shippingAPI.couriers().then(response => {
+      if (!active) return;
+      setCouriers(response.data.data);
+      setCourierCode(response.data.data[0] || '');
+    }).catch(() => { if (active) setShippingError('Daftar kurir belum dapat dimuat. Refresh halaman untuk mencoba lagi.'); });
+    return () => { active = false; };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || destination || destinationQuery.trim().length < 3) {
+      setDestinations([]);
+      setSearching(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      setShippingError('');
+      try {
+        const response = await shippingAPI.destinations(destinationQuery.trim(), controller.signal);
+        if (!controller.signal.aborted) setDestinations(response.data.data);
+      } catch (err) {
+        if (!controller.signal.aborted) setShippingError(err.response?.data?.message || 'Pencarian tujuan gagal. Coba lagi.');
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
+      }
+    }, 400);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [destinationQuery, destination, token]);
+
+  useEffect(() => {
+    if (!token || !destination || !courierCode || !JSON.parse(itemsKey).length) {
+      setRatesLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setRatesLoading(true);
+    setShippingError('');
+    shippingAPI.rates({ destination_id: destination.id, courier: courierCode, items: JSON.parse(itemsKey) }, controller.signal)
+      .then(response => {
+        if (!controller.signal.aborted) setQuote({ key: quoteKey, ...response.data });
+      }).catch(err => {
+        if (!controller.signal.aborted) {
+          const details = Object.values(err.response?.data?.errors || {}).flat();
+          setShippingError(details.join(' ') || err.response?.data?.message || 'Tarif belum dapat dimuat.');
+          setQuote(null);
+        }
+      }).finally(() => { if (!controller.signal.aborted) setRatesLoading(false); });
+    return () => controller.abort();
+  }, [destination?.id, courierCode, itemsKey, quoteKey, token]);
   const [isEditingAddress, setIsEditingAddress] = useState(true);
 
   // Scroll to top on mount
@@ -164,7 +162,7 @@ export default function CheckoutPage() {
       window.scrollTo(0, 0);
       return;
     }
-    if (!selectedCourier) {
+    if (!destination || ratesLoading || !selectedCourier) {
       setError('Pilih ekspedisi pengiriman terlebih dahulu');
       window.scrollTo(0, 0);
       return;
@@ -180,6 +178,7 @@ export default function CheckoutPage() {
         shipping_phone: formData.shipping_phone,
         shipping_name: formData.shipping_name,
         payment_method: 'transfer', // default to midtrans payment
+        shipping_destination_id: destination.id,
         shipping_cost: shippingCost,
         shipping_courier: selectedCourier.courier,
         shipping_service: selectedCourier.service,
@@ -202,6 +201,7 @@ export default function CheckoutPage() {
       navigate(`/orders/${orderId}`);
     } catch (err) {
       const responseData = err.response?.data;
+      if (responseData?.errors?.shipping_cost) { setSelectedCourier(null); setRetryRates(value => value + 1); }
       const validationErrors = Object.values(responseData?.errors || {}).flat();
       setError(validationErrors.length > 0
         ? validationErrors.join(' ')
@@ -327,15 +327,20 @@ export default function CheckoutPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Kota</label>
-                        <input
-                          type="text"
-                          name="shipping_city"
-                          value={formData.shipping_city}
-                          onChange={handleInputChange}
-                          placeholder="Jakarta Selatan"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        <label htmlFor="shipping-destination" className="block text-sm font-medium text-gray-700 mb-2">Tujuan pengiriman</label>
+                        <input id="shipping-destination" type="text" value={destinationQuery}
+                          onChange={e => { setDestinationQuery(e.target.value); setDestination(null); setSelectedCourier(null); }}
+                          placeholder="Cari kelurahan, kecamatan, kota, atau kode pos"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                        {searching && <p className="text-sm text-gray-500 mt-2" role="status">Mencari tujuan...</p>}
+                        {!destination && destinations.length > 0 && <ul aria-label="Hasil pencarian tujuan" className="mt-2 max-h-52 overflow-y-auto border rounded-lg divide-y">
+                          {destinations.map(area => <li key={area.id}><button type="button" className="w-full text-left p-3 text-sm hover:bg-blue-50"
+                            onClick={() => { setDestination(area); setDestinationQuery(area.label); setDestinations([]); setFormData(prev => ({ ...prev, shipping_city: area.city_name })); }}>
+                            {area.label}
+                          </button></li>)}
+                        </ul>}
+                        {destination && <p className="text-sm text-green-700 mt-2">Tujuan dipilih: {destination.label}</p>}
+                        {!destination && !searching && destinationQuery.trim().length >= 3 && destinations.length === 0 && <p className="text-sm text-gray-500 mt-2">Pilih hasil pencarian setelah tersedia, atau coba kata kunci lain.</p>}
                       </div>
                     </div>
                   )}
@@ -349,7 +354,17 @@ export default function CheckoutPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {COURIERS.map((courier) => {
+                    <label htmlFor="shipping-courier" className="block text-sm font-medium text-gray-700">Kurir</label>
+                    <select id="shipping-courier" value={courierCode} onChange={e => setCourierCode(e.target.value)} className="w-full border rounded-lg p-3">
+                      {couriers.map(code => <option key={code} value={code}>{COURIER_NAMES[code] || code.toUpperCase()}</option>)}
+                    </select>
+                    {!destination && <p className="text-sm text-gray-500">Pilih tujuan pengiriman untuk melihat tarif.</p>}
+                    {ratesLoading && <p role="status" className="text-sm text-gray-500">Menghitung ongkir...</p>}
+                    {shippingError && <p role="alert" className="text-sm text-red-600">{shippingError}</p>}
+                    {destination && !ratesLoading && quote?.key === quoteKey && !rates.length && <p className="text-sm text-gray-500">Layanan tidak tersedia untuk tujuan ini. Pilih kurir atau tujuan lain.</p>}
+                    {destination && <button type="button" disabled={ratesLoading} onClick={() => { setSelectedCourier(null); setRetryRates(value => value + 1); }} className="text-sm text-blue-700 disabled:opacity-50">Periksa ongkir ulang</button>}
+                    {rates.map((rate) => {
+                      const courier = { ...rate, id: `${rate.courier}:${rate.service}`, quoteKey };
                       const isSelected = selectedCourier?.id === courier.id;
                       return (
                         <div
@@ -373,12 +388,12 @@ export default function CheckoutPage() {
                           </div>
 
                           {/* Logo/Emoji */}
-                          <span className="text-2xl flex-shrink-0">{courier.logo}</span>
+                          <span className="text-2xl flex-shrink-0"><FiTruck /></span>
 
                           {/* Info */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-bold text-gray-800">{courier.courier}</span>
+                              <span className="font-bold text-gray-800">{courier.name}</span>
                               <span className="text-sm text-gray-500">·</span>
                               <span className="text-sm text-gray-600">{courier.service}</span>
                             </div>
@@ -483,7 +498,7 @@ export default function CheckoutPage() {
 
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || ratesLoading || !selectedCourier}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-colors"
                   >
                     {loading ? 'Memproses...' : 'Lanjut ke Pembayaran'}

@@ -99,7 +99,13 @@ export const adminAPI = {
   getAdminProducts: (params) => api.get('/admin/products', { params }),
   getAdminProduct: (id) => api.get(`/admin/products/${id}`),
   createProduct: (data) => api.post('/admin/products', data),
-  updateProduct: (id, data) => api.put(`/admin/products/${id}`, data),
+  updateProduct: (id, data) => {
+    if (data instanceof FormData) {
+      data.set('_method', 'PUT');
+      return api.post(`/admin/products/${id}`, data);
+    }
+    return api.put(`/admin/products/${id}`, data);
+  },
   deleteProduct: (id) => api.delete(`/admin/products/${id}`),
   deleteProductImage: (productId, imageId) => api.delete(`/admin/products/${productId}/images/${imageId}`),
   updateStock: (data) => api.post('/admin/products/update-stock', data),
@@ -117,4 +123,11 @@ export const adminAPI = {
   rejectPayment: (id) => api.post(`/admin/orders/${id}/reject-payment`),
   updateOrderStatus: (id, data) => api.put(`/admin/orders/${id}/status`, data),
   cancelAdminOrder: (id) => api.post(`/admin/orders/${id}/cancel`),
+};
+
+// Shipping endpoints require the same authentication token as checkout.
+export const shippingAPI = {
+  destinations: (search, signal) => api.get('/shipping/destinations', { params: { search }, signal }),
+  couriers: () => api.get('/shipping/couriers'),
+  rates: (data, signal) => api.post('/shipping/rates', data, { signal }),
 };
