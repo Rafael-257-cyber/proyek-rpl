@@ -51,6 +51,10 @@ Route::get('/promos', [PromoController::class, 'index']);
 
 // Protected Routes - Require Authentication
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/shipping/addresses', [\App\Http\Controllers\Api\ShippingAddressController::class, 'index']);
+    Route::post('/shipping/addresses', [\App\Http\Controllers\Api\ShippingAddressController::class, 'store'])->middleware('throttle:20,1');
+    Route::put('/shipping/addresses/{id}', [\App\Http\Controllers\Api\ShippingAddressController::class, 'update'])->middleware('throttle:20,1');
+    Route::delete('/shipping/addresses/{id}', [\App\Http\Controllers\Api\ShippingAddressController::class, 'destroy']);
     Route::get('/shipping/destinations', [\App\Http\Controllers\Api\ShippingController::class, 'destinations'])->middleware('throttle:60,1');
     Route::get('/shipping/couriers', [\App\Http\Controllers\Api\ShippingController::class, 'couriers']);
     Route::post('/shipping/rates', [\App\Http\Controllers\Api\ShippingController::class, 'rates'])->middleware('throttle:30,1');

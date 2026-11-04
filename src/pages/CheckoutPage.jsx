@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiChevronRight, FiEdit2, FiTruck, FiCheckCircle } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +19,15 @@ export default function CheckoutPage() {
   const { cartItems, removeFromCart, updateQuantity, totalPrice, clearCart } = useCart();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [recentAddresses, setRecentAddresses] = useState([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressError, setAddressError] = useState('');
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState(null);
+  const [activeAddressKey, setActiveAddressKey] = useState('');
+  const [showAddressList, setShowAddressList] = useState(false);
+  const addressTouchedRef = useRef(false);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -99,6 +108,114 @@ export default function CheckoutPage() {
   }, [destination?.id, courierCode, itemsKey, quoteKey, token]);
   const [isEditingAddress, setIsEditingAddress] = useState(true);
 
+  const chooseAddress = (address, source = 'saved') => {
+    addressTouchedRef.current = true;
+    setSelectedAddressId(source === 'saved' ? address.id : null);
+    setActiveAddressKey(`${source}:${address.id}`);
+    setFormData({
+      shipping_name: address.shipping_name,
+      shipping_phone: address.shipping_phone,
+      shipping_address: address.shipping_address,
+      shipping_city: address.shipping_city,
+    });
+    setDestination(address.destination || null);
+    setDestinationQuery(address.destination?.label || address.shipping_city || '');
+    setDestinations([]);
+    setSelectedCourier(null);
+    setRetryRates(value => value + 1);
+    setAddressError('');
+    setShowAddressList(false);
+    setIsEditingAddress(!address.destination);
+  };
+
+  useEffect(() => {
+    if (!token || !user?.id) return;
+    let active = true;
+    addressTouchedRef.current = false;
+    setSavedAddresses([]);
+    setRecentAddresses([]);
+    setSelectedAddressId(null);
+    setActiveAddressKey('');
+    setFormData({ shipping_name: user.name || '', shipping_phone: '', shipping_address: '', shipping_city: '' });
+    setDestination(null);
+    setDestinationQuery('');
+    setSelectedCourier(null);
+    setIsEditingAddress(true);
+    setAddressError('');
+    setAddressesLoading(true);
+    shippingAPI.addresses().then(response => {
+      if (!active) return;
+      const saved = response.data.data || [];
+      const recent = response.data.recent || [];
+      setSavedAddresses(saved);
+      setRecentAddresses(recent);
+      if (!addressTouchedRef.current) {
+        if (saved.length) chooseAddress(saved[0]);
+        else if (recent.length) chooseAddress(recent[0], 'recent');
+      }
+    }).catch(() => {
+      if (active) setAddressError('Alamat tersimpan belum dapat dimuat. Kamu tetap bisa mengisi alamat baru.');
+    }).finally(() => { if (active) setAddressesLoading(false); });
+    return () => { active = false; };
+  }, [token, user?.id]);
+
+  const newAddress = () => {
+    addressTouchedRef.current = true;
+    setSelectedAddressId(null);
+    setActiveAddressKey('');
+    setFormData({ shipping_name: user?.name || '', shipping_phone: '', shipping_address: '', shipping_city: '' });
+    setDestination(null);
+    setDestinationQuery('');
+    setDestinations([]);
+    setSelectedCourier(null);
+    setAddressError('');
+    setShowAddressList(false);
+    setIsEditingAddress(true);
+  };
+
+  const validAddress = () => {
+    if (!formData.shipping_name.trim() || !formData.shipping_phone.trim() || !formData.shipping_address.trim() || !destination) {
+      setAddressError('Lengkapi nama penerima, nomor HP, alamat lengkap, dan pilih tujuan pengiriman.');
+      return false;
+    }
+    setAddressError('');
+    return true;
+  };
+
+  const saveAddress = async () => {
+    if (savingAddress || !validAddress()) return;
+    setSavingAddress(true);
+    try {
+      const payload = { ...formData, destination };
+      const response = selectedAddressId
+        ? await shippingAPI.updateAddress(selectedAddressId, payload)
+        : await shippingAPI.saveAddress(payload);
+      const address = response.data.address;
+      setSavedAddresses(previous => [address, ...previous.filter(item => item.id !== address.id)]);
+      setRecentAddresses(previous => previous.filter(item => !(item.shipping_name === address.shipping_name
+        && item.shipping_phone === address.shipping_phone && item.shipping_address === address.shipping_address
+        && item.destination?.id === address.destination?.id)));
+      chooseAddress(address);
+    } catch (err) {
+      const details = Object.values(err.response?.data?.errors || {}).flat();
+      setAddressError(details.join(' ') || err.response?.data?.message || 'Alamat belum dapat disimpan. Coba lagi.');
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  const deleteAddress = async address => {
+    if (savingAddress || !window.confirm(`Hapus alamat tersimpan untuk ${address.shipping_name}?`)) return;
+    setSavingAddress(true);
+    try {
+      await shippingAPI.deleteAddress(address.id);
+      setSavedAddresses(previous => previous.filter(item => item.id !== address.id));
+      if (selectedAddressId === address.id) newAddress();
+    } catch (err) {
+      setAddressError(err.response?.data?.message || 'Alamat belum dapat dihapus.');
+    } finally { setSavingAddress(false); }
+  };
+
   // Scroll to top on mount
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -122,6 +239,7 @@ export default function CheckoutPage() {
   }, [user]);
 
   const handleInputChange = (e) => {
+    addressTouchedRef.current = true;
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -271,13 +389,50 @@ export default function CheckoutPage() {
                     <h2 className="text-xl font-bold text-gray-800">Alamat Pengiriman</h2>
                     <button
                       type="button"
-                      onClick={() => setIsEditingAddress(!isEditingAddress)}
+                      disabled={savingAddress}
+                      onClick={() => { if (!isEditingAddress || validAddress()) setIsEditingAddress(!isEditingAddress); }}
                       className="text-blue-600 text-sm font-medium hover:text-blue-700 flex items-center gap-1"
                     >
                       <FiEdit2 className="w-4 h-4" />
                       {isEditingAddress ? 'Selesai' : 'Ubah'}
                     </button>
                   </div>
+
+                  <div className="flex flex-wrap items-center gap-3 mb-4">
+                    <button type="button" disabled={savingAddress} onClick={() => setShowAddressList(value => !value)}
+                      className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50"
+                      aria-expanded={showAddressList} aria-controls="checkout-address-list">
+                      {showAddressList ? 'Tutup daftar alamat' : 'Pilih alamat sebelumnya'}
+                    </button>
+                    <button type="button" disabled={savingAddress} onClick={newAddress} className="text-sm font-semibold text-blue-700 disabled:opacity-50">+ Tambah alamat baru</button>
+                    {addressesLoading && <span role="status" className="text-sm text-gray-500">Memuat alamat...</span>}
+                  </div>
+                  {addressError && <p role="alert" className="mb-4 text-sm text-red-600">{addressError}</p>}
+                  {showAddressList && (
+                    <div id="checkout-address-list" className="mb-5 max-h-80 overflow-y-auto space-y-3 rounded-xl border border-gray-200 p-3">
+                      {!savedAddresses.length && !recentAddresses.length && !addressesLoading && <p className="text-sm text-gray-500">Belum ada alamat. Isi form lalu simpan untuk checkout berikutnya.</p>}
+                      {[{ title: 'Alamat tersimpan', source: 'saved', items: savedAddresses }, { title: 'Dari pesanan sebelumnya', source: 'recent', items: recentAddresses }].map(group => group.items.length > 0 && (
+                        <div key={group.source}>
+                          <h3 className="mb-2 text-sm font-semibold text-gray-700">{group.title}</h3>
+                          <div className="space-y-2">
+                            {group.items.map(address => (
+                              <div key={address.id} className={`rounded-lg border p-3 ${activeAddressKey === `${group.source}:${address.id}` ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                <button type="button" disabled={savingAddress} onClick={() => chooseAddress(address, group.source)}
+                                  aria-pressed={activeAddressKey === `${group.source}:${address.id}`} className="w-full text-left text-sm disabled:opacity-50">
+                                  <span className="block font-semibold text-gray-900">{address.shipping_name} <span className="font-normal text-gray-500">| {address.shipping_phone}</span></span>
+                                  <span className="block mt-1 text-gray-600">{address.shipping_address}</span>
+                                  <span className="block text-gray-600">{address.destination?.label || address.shipping_city}</span>
+                                  {!address.destination && <span className="block mt-1 text-amber-700">Pilih ulang wilayah tujuan untuk menghitung ongkir.</span>}
+                                  {group.source === 'recent' && <span className="block mt-1 text-xs text-gray-400">Pesanan #{address.order_id}</span>}
+                                </button>
+                                {group.source === 'saved' && <button type="button" disabled={savingAddress} onClick={() => deleteAddress(address)} className="mt-2 text-xs text-red-600 disabled:opacity-50">Hapus</button>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {!isEditingAddress ? (
                     <div className="bg-blue-50 border-2 border-blue-600 rounded-2xl p-4">
@@ -287,7 +442,7 @@ export default function CheckoutPage() {
                           <h3 className="font-semibold text-gray-800 mb-1">{formData.shipping_name}</h3>
                           <p className="text-sm text-gray-600">{formData.shipping_phone}</p>
                           <p className="text-sm text-gray-600">{formData.shipping_address}</p>
-                          <p className="text-sm text-gray-600">{formData.shipping_city}</p>
+                          <p className="text-sm text-gray-600">{destination?.label || formData.shipping_city}</p>
                         </div>
                       </div>
                     </div>
@@ -329,18 +484,26 @@ export default function CheckoutPage() {
                       <div>
                         <label htmlFor="shipping-destination" className="block text-sm font-medium text-gray-700 mb-2">Tujuan pengiriman</label>
                         <input id="shipping-destination" type="text" value={destinationQuery}
-                          onChange={e => { setDestinationQuery(e.target.value); setDestination(null); setSelectedCourier(null); }}
+                          onChange={e => { addressTouchedRef.current = true; setDestinationQuery(e.target.value); setDestination(null); setDestinations([]); setSelectedCourier(null); }}
                           placeholder="Cari kelurahan, kecamatan, kota, atau kode pos"
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
                         {searching && <p className="text-sm text-gray-500 mt-2" role="status">Mencari tujuan...</p>}
                         {!destination && destinations.length > 0 && <ul aria-label="Hasil pencarian tujuan" className="mt-2 max-h-52 overflow-y-auto border rounded-lg divide-y">
                           {destinations.map(area => <li key={area.id}><button type="button" className="w-full text-left p-3 text-sm hover:bg-blue-50"
-                            onClick={() => { setDestination(area); setDestinationQuery(area.label); setDestinations([]); setFormData(prev => ({ ...prev, shipping_city: area.city_name })); }}>
+                            onClick={() => { addressTouchedRef.current = true; setDestination(area); setDestinationQuery(area.label); setDestinations([]); setFormData(prev => ({ ...prev, shipping_city: area.city_name })); }}>
                             {area.label}
                           </button></li>)}
                         </ul>}
                         {destination && <p className="text-sm text-green-700 mt-2">Tujuan dipilih: {destination.label}</p>}
                         {!destination && !searching && destinationQuery.trim().length >= 3 && destinations.length === 0 && <p className="text-sm text-gray-500 mt-2">Pilih hasil pencarian setelah tersedia, atau coba kata kunci lain.</p>}
+                      </div>
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        <button type="button" disabled={savingAddress || addressesLoading} onClick={saveAddress}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                          {savingAddress ? 'Menyimpan...' : selectedAddressId ? 'Perbarui alamat tersimpan' : 'Simpan dan gunakan alamat'}
+                        </button>
+                        <button type="button" disabled={savingAddress} onClick={() => { if (validAddress()) setIsEditingAddress(false); }}
+                          className="rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50">Gunakan tanpa menyimpan</button>
                       </div>
                     </div>
                   )}

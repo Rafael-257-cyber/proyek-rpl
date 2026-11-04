@@ -127,6 +127,10 @@ export const adminAPI = {
 
 // Shipping endpoints require the same authentication token as checkout.
 export const shippingAPI = {
+  addresses: () => api.get('/shipping/addresses'),
+  saveAddress: (data) => api.post('/shipping/addresses', data),
+  updateAddress: (id, data) => api.put(`/shipping/addresses/${id}`, data),
+  deleteAddress: (id) => api.delete(`/shipping/addresses/${id}`),
   destinations: (search, signal) => api.get('/shipping/destinations', { params: { search }, signal }),
   couriers: () => api.get('/shipping/couriers'),
   rates: (data, signal) => api.post('/shipping/rates', data, { signal }),

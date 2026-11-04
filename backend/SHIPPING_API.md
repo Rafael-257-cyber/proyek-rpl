@@ -114,6 +114,38 @@ produk yang sudah tersedia. Jangan menetapkan berat arbitrer agar checkout lolos
 Perhitungan saat ini menggunakan berat yang dikirim ke Shipping Cost API;
 pengepakan dan biaya khusus joran berdimensi panjang perlu diverifikasi dengan kurir.
 
+## Alamat tersimpan
+
+Migration `2026_10_15_000002_create_shipping_addresses_table` menambahkan buku alamat
+per akun. Endpoint menggunakan autentikasi login yang sama:
+
+- `GET /api/shipping/addresses`: `data` berisi alamat tersimpan, `recent` berisi
+  alamat unik dari pesanan milik pengguna (maksimal 10, diperiksa dari 30 pesanan terakhir).
+- `POST /api/shipping/addresses`: simpan alamat baru; alamat identik tidak diduplikasi.
+- `PUT /api/shipping/addresses/{id}`: perbarui alamat sendiri.
+- `DELETE /api/shipping/addresses/{id}`: hapus alamat tersimpan sendiri.
+
+Payload simpan/perbarui:
+
+```json
+{
+  "shipping_name": "Penerima Contoh",
+  "shipping_phone": "081234567890",
+  "shipping_address": "Jalan Contoh No. 10",
+  "destination": {
+    "id": 69243,
+    "label": "GUBENG, GUBENG, SURABAYA, JAWA TIMUR, 60281",
+    "city_name": "SURABAYA"
+  }
+}
+```
+
+`destination` menggunakan hasil pencarian wilayah; `shipping_city` diturunkan dari
+`destination.city_name`. Maksimal 20 alamat tersimpan per pengguna. Menghapus atau
+mengubah buku alamat tidak mengubah alamat pada pesanan yang sudah dibuat.
+Alamat pesanan lama yang belum memiliki ID tujuan memerlukan pemilihan ulang wilayah.
+Frontend mengosongkan pilihan layanan dan memeriksa tarif kembali saat berganti alamat.
+
 ## Pengujian
 
 `php artisan test --filter=ShippingTest`
