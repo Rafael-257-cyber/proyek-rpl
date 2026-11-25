@@ -19,6 +19,7 @@ export default function AdminProducts() {
     category_id: '',
     price: '',
     stock: '',
+    weight_grams: '',
     brand: '',
     location: '',
     specifications: '',
@@ -95,6 +96,7 @@ export default function AdminProducts() {
       category_id: '',
       price: '',
       stock: '',
+      weight_grams: '',
       brand: '',
       location: '',
       specifications: '',
@@ -115,6 +117,7 @@ export default function AdminProducts() {
       category_id: product.category_id,
       price: product.price ? new Intl.NumberFormat('id-ID').format(product.price) : '',
       stock: product.stock,
+      weight_grams: product.weight_grams ?? '',
       brand: product.brand,
       location: product.location,
       specifications: JSON.stringify(product.specifications || {}),
@@ -197,6 +200,7 @@ export default function AdminProducts() {
       payload.append('price', rawPrice ? parseFloat(rawPrice).toString() : '0');
       
       payload.append('stock', parseInt(formData.stock).toString());
+      payload.append('weight_grams', formData.weight_grams.toString());
       payload.append('brand', formData.brand || '');
       
       // Only append location if it has a value
@@ -552,6 +556,14 @@ export default function AdminProducts() {
                     className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   />
+                  <label className="flex flex-col gap-1 text-sm text-gray-700">
+                    Berat per produk termasuk kemasan (gram)
+                    <input type="number" min="1" max="100000" step="1" required
+                      value={formData.weight_grams}
+                      onChange={e => setFormData({ ...formData, weight_grams: e.target.value })}
+                      placeholder="Isi berat sebenarnya, contoh 500"
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </label>
                   <select
                     value={formData.location}
                     onChange={(e) => setFormData({...formData, location: e.target.value})}

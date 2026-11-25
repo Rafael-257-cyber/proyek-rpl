@@ -55,6 +55,7 @@ class ProductController extends Controller
             'description' => 'required|string',
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
+            'weight_grams' => 'required|integer|min:1|max:100000',
             'brand' => 'nullable|string|max:255',
             'location' => 'nullable|in:Air Asin/Laut,Air Tawar,Kolam',
             'specifications' => 'nullable|string',
@@ -69,7 +70,8 @@ class ProductController extends Controller
         }
 
         // Prepare data
-        $data = $request->except(['image', 'promo_id']);
+        $data = $validator->validated();
+        unset($data['image'], $data['additional_images'], $data['promo_id']);
         
         // Parse specifications from JSON string to array
         if (isset($data['specifications']) && is_string($data['specifications'])) {
@@ -160,6 +162,7 @@ class ProductController extends Controller
             'description' => 'sometimes|string',
             'price' => 'sometimes|numeric|min:0',
             'stock' => 'sometimes|integer|min:0',
+            'weight_grams' => 'sometimes|required|integer|min:1|max:100000',
             'brand' => 'nullable|string|max:255',
             'location' => 'nullable|in:Air Asin/Laut,Air Tawar,Kolam',
             'specifications' => 'nullable|string',
@@ -173,8 +176,12 @@ class ProductController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Prepare data
-        $data = $request->except(['image', 'promo_id']);
+        // Reject empty/misparsed update bodies instead of reporting a false success.
+        $data = $validator->validated();
+        if (!$data) {
+            return response()->json(['message' => 'Tidak ada data produk yang diterima. Refresh halaman dan coba simpan kembali.'], 422);
+        }
+        unset($data['image'], $data['additional_images'], $data['promo_id']);
         
         // Parse specifications from JSON string to array
         if (isset($data['specifications']) && is_string($data['specifications'])) {

@@ -79,17 +79,18 @@ class OrderController extends Controller
     public function checkout(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
+            'items' => 'required|array|min:1|max:100',
+            'items.*.product_id' => 'required|integer|distinct|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1|max:1000',
             'shipping_name' => 'required|string',
             'shipping_address' => 'required|string',
             'shipping_city' => 'required|string',
             'shipping_phone' => 'required|string',
             'payment_method' => 'required|in:transfer,cod,ewallet',
-            'shipping_cost' => 'nullable|numeric|min:0',
-            'shipping_courier' => 'nullable|string|max:100',
-            'shipping_service' => 'nullable|string|max:100',
+            'shipping_destination_id' => 'required|integer|min:1',
+            'shipping_cost' => 'required|integer|min:1',
+            'shipping_courier' => ['required', 'string', \Illuminate\Validation\Rule::in(config('rajaongkir.couriers'))],
+            'shipping_service' => 'required|string|max:100',
             'shipping_estimate' => 'nullable|string|max:100',
         ]);
 
@@ -97,21 +98,32 @@ class OrderController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $shippingCost = (float) $request->input('shipping_cost', 15000);
+        $quote = app(\App\Services\RajaOngkir::class)->rates(
+            (int) $request->shipping_destination_id, $request->items, $request->shipping_courier
+        );
+        $shippingRate = collect($quote['rates'])->firstWhere('service', $request->shipping_service);
+        if (!$shippingRate || $shippingRate['cost'] !== (int) $request->shipping_cost) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'shipping_cost' => 'Tarif atau layanan berubah. Periksa ongkir dan pilih layanan kembali.',
+            ]);
+        }
+        $shippingCost = $shippingRate['cost'];
 
         try {
-            $order = DB::transaction(function () use ($request, $shippingCost) {
+            $order = DB::transaction(function () use ($request, $shippingCost, $shippingRate, $quote) {
                 $subtotal = 0;
                 $orderItems = [];
+                $weight = 0;
 
-                foreach ($request->items as $item) {
-                    $product = Product::find($item['product_id']);
+                foreach (collect($request->items)->sortBy('product_id') as $item) {
+                    $product = Product::lockForUpdate()->find($item['product_id']);
 
                     if (!$product || $product->stock < $item['quantity']) {
                         $productName = $product?->name ?? $item['product_id'];
                         throw new \RuntimeException('Product ' . $productName . ' stock not available');
                     }
 
+                    $weight += (int) $product->weight_grams * $item['quantity'];
                     $subtotal += $product->price * $item['quantity'];
                     $orderItems[] = [
                         'product_id' => $item['product_id'],
@@ -120,9 +132,14 @@ class OrderController extends Controller
                     ];
                 }
 
+                if ($weight !== $quote['weight_grams']) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['shipping_cost' => 'Berat produk berubah. Periksa ongkir kembali.']);
+                }
                 $order = Order::create([
                     'user_id' => $request->user()->id,
                     'shipping_name' => $request->shipping_name,
+                    'shipping_destination_id' => $quote['destination_id'],
+                    'shipping_weight_grams' => $quote['weight_grams'],
                     'total_price' => $subtotal + $shippingCost,
                     'ongkir' => $shippingCost,
                     'status' => 'pending_payment',
@@ -131,9 +148,9 @@ class OrderController extends Controller
                     'shipping_address' => $request->shipping_address,
                     'shipping_city' => $request->shipping_city,
                     'shipping_phone' => $request->shipping_phone,
-                    'shipping_courier' => $request->shipping_courier,
-                    'shipping_service' => $request->shipping_service,
-                    'shipping_estimate' => $request->shipping_estimate,
+                    'shipping_courier' => $shippingRate['courier'],
+                    'shipping_service' => $shippingRate['service'],
+                    'shipping_estimate' => $shippingRate['estimate'],
                     'payment_due_at' => now()->addHours(24),
                 ]);
 
